@@ -2,17 +2,29 @@ mod cache;
 mod config;
 mod data;
 mod somehow;
-mod types;
 
 use std::path::PathBuf;
 
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use clap::Parser;
+use jiff::Timestamp;
+use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
 use crate::config::Config;
-use crate::types::{Job, QueryReply, QueryRequest, QueueReply};
+use crate::data::job::{JobQuery, JobResult, JobStatus, JobStatusV0};
+
+#[derive(Deserialize)]
+struct QueryRequest {
+    jobs: Vec<JobQuery>,
+}
+
+#[derive(Serialize)]
+struct QueryReply {
+    completed: Vec<JobResult>,
+    pending: Vec<JobStatus>,
+}
 
 #[derive(Parser)]
 struct Args {
@@ -27,12 +39,15 @@ struct Args {
 }
 
 async fn query(Json(body): Json<QueryRequest>) -> Json<QueryReply> {
-    let pending: Vec<Job> = body
+    let pending: Vec<JobStatus> = body
         .jobs
         .into_iter()
-        .map(|input| Job {
-            input,
-            running_since: None,
+        .map(|job| {
+            JobStatus::V0(JobStatusV0 {
+                data: job.query_data(),
+                queued: Timestamp::now(),
+                started: None,
+            })
         })
         .collect();
 
@@ -40,6 +55,11 @@ async fn query(Json(body): Json<QueryRequest>) -> Json<QueryReply> {
         completed: vec![],
         pending,
     })
+}
+
+#[derive(Serialize)]
+struct QueueReply {
+    pending: Vec<JobStatus>,
 }
 
 async fn queue() -> Json<QueueReply> {
