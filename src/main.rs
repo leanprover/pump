@@ -20,8 +20,8 @@ struct Args {
     #[arg(long, short, default_value = "config.toml")]
     config: PathBuf,
 
-    #[arg(long, default_value = "results")]
-    result_dir: PathBuf,
+    #[arg(long, default_value = "cache")]
+    cache_dir: PathBuf,
 
     #[arg(long, default_value = "repos")]
     repo_dir: PathBuf,
@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
     let _config = Config::load(&args.config)?;
 
     let state = ServerState {
-        cache: Arc::new(Cache::new(args.result_dir)),
+        cache: Arc::new(Cache::new(args.cache_dir)),
         queue: Arc::new(Mutex::new(Queue::new())),
     };
 
