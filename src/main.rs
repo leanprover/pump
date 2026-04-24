@@ -10,11 +10,18 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use clap::Parser;
+use tokio::select;
 
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::queue::Queue;
-use crate::server::ServerState;
+
+#[derive(Clone)]
+struct AppState {
+    pub config: &'static Config,
+    pub cache: Arc<Cache>,
+    pub queue: Arc<Mutex<Queue>>,
+}
 
 #[derive(Parser)]
 struct Args {
@@ -31,20 +38,19 @@ struct Args {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let _config = Config::load(&args.config)?;
+    let config = Config::load(&args.config)?;
 
-    let state = ServerState {
+    let state = AppState {
+        config: Box::leak(Box::new(config)),
         cache: Arc::new(Cache::new(args.cache_dir)),
         queue: Arc::new(Mutex::new(Queue::new())),
     };
 
-    let queue_state = state.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            queue_state.queue.lock().unwrap().update(&queue_state.cache);
-        }
-    });
+    let state_queue = state.clone();
+    let state_server = state;
 
-    server::run(state).await
+    select! {
+        res = queue::run(state_queue) => res,
+        res = server::run(state_server) => res,
+    }
 }

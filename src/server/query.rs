@@ -4,8 +4,10 @@ use axum::Json;
 use axum::extract::State;
 use serde::{Deserialize, Serialize};
 
-use crate::data::job::{JobQuery, JobResult, JobStatus};
-use crate::server::ServerState;
+use crate::{
+    AppState,
+    data::job::{JobQuery, JobResult, JobStatus},
+};
 
 #[derive(Deserialize)]
 pub struct QueryRequest {
@@ -19,7 +21,7 @@ pub struct QueryReply {
 }
 
 pub async fn query(
-    State(state): State<ServerState>,
+    State(state): State<AppState>,
     Json(body): Json<QueryRequest>,
 ) -> Json<QueryReply> {
     let mut queue = state.queue.lock().unwrap();

@@ -1,9 +1,10 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, time::Duration};
 
 use jiff::Timestamp;
 use tokio::sync::oneshot::{self, error::TryRecvError};
 
 use crate::{
+    AppState,
     cache::{Cache, JobId},
     data::job::{JobQueryV0, JobResultV0, JobStatus, JobStatusV0},
 };
@@ -85,9 +86,16 @@ impl Queue {
         self.0.iter().map(|job| job.status()).collect()
     }
 
-    pub fn update(&mut self, cache: &Cache) {
+    pub fn finish(&mut self, cache: &Cache) {
         self.0.retain_mut(|job| job.finish(cache));
+    }
+}
 
+pub async fn run(state: AppState) -> anyhow::Result<()> {
+    loop {
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let mut queue = state.queue.lock().unwrap();
+        queue.finish(&state.cache);
         // TODO Start pending jobs
     }
 }
