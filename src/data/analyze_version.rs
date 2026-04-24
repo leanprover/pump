@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::data::common::SourceV0;
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputV0 {
     pub source: SourceV0,
     pub sha: String,
@@ -14,6 +14,14 @@ pub struct InputV0 {
 #[serde(tag = "version", rename_all = "snake_case")]
 pub enum Input {
     V0(InputV0),
+}
+
+impl From<Input> for InputV0 {
+    fn from(value: Input) -> Self {
+        match value {
+            Input::V0(input) => input,
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]

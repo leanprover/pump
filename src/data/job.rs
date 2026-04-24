@@ -26,17 +26,16 @@ pub enum JobQuery {
     V0(JobQueryV0),
 }
 
-impl JobQuery {
-    pub fn query_data(&self) -> JobQueryDataV0 {
-        match self {
-            JobQuery::V0(j) => match &j.data {
-                JobQueryDataV0::AnalyzeGlobal { input } => JobQueryDataV0::AnalyzeGlobal {
-                    input: input.clone(),
-                },
-                JobQueryDataV0::AnalyzeVersion { input } => JobQueryDataV0::AnalyzeVersion {
-                    input: input.clone(),
-                },
-            },
+impl From<JobQueryV0> for JobQuery {
+    fn from(value: JobQueryV0) -> Self {
+        Self::V0(value)
+    }
+}
+
+impl From<JobQuery> for JobQueryV0 {
+    fn from(value: JobQuery) -> Self {
+        match value {
+            JobQuery::V0(job) => job,
         }
     }
 }
@@ -54,6 +53,12 @@ pub struct JobStatusV0 {
 #[serde(tag = "version", rename_all = "snake_case")]
 pub enum JobStatus {
     V0(JobStatusV0),
+}
+
+impl From<JobStatusV0> for JobStatus {
+    fn from(value: JobStatusV0) -> Self {
+        Self::V0(value)
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -86,17 +91,8 @@ pub enum JobResult {
     V0(JobResultV0),
 }
 
-impl JobResult {
-    pub fn query_data(&self) -> JobQueryDataV0 {
-        match self {
-            JobResult::V0(j) => match &j.data {
-                JobResultDataV0::AnalyzeGlobal { input, .. } => JobQueryDataV0::AnalyzeGlobal {
-                    input: input.clone(),
-                },
-                JobResultDataV0::AnalyzeVersion { input, .. } => JobQueryDataV0::AnalyzeVersion {
-                    input: input.clone(),
-                },
-            },
-        }
+impl From<JobResultV0> for JobResult {
+    fn from(value: JobResultV0) -> Self {
+        Self::V0(value)
     }
 }
