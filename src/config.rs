@@ -11,30 +11,50 @@ mod default {
     pub(super) fn cmd_analyze_version() -> Vec<String> {
         vec!["impeller-analyze-version".to_string()]
     }
-}
 
-#[derive(Deserialize)]
-pub struct ImpellerConfig {
-    #[serde(default = "default::cmd_analyze_global")]
-    pub cmd_analyze_global: Vec<String>,
+    pub(super) fn bubblewrap() -> bool {
+        true
+    }
 
-    #[serde(default = "default::cmd_analyze_version")]
-    pub cmd_analyze_version: Vec<String>,
-}
+    pub(super) fn bubblewrap_nixos() -> bool {
+        false
+    }
 
-impl Default for ImpellerConfig {
-    fn default() -> Self {
-        Self {
-            cmd_analyze_global: default::cmd_analyze_global(),
-            cmd_analyze_version: default::cmd_analyze_version(),
-        }
+    pub(super) fn threads_total() -> usize {
+        num_cpus::get()
+    }
+
+    pub(super) fn threads_analyze_global() -> usize {
+        1
+    }
+
+    pub(super) fn threads_analyze_version() -> usize {
+        1
     }
 }
 
 #[derive(Deserialize)]
 pub struct Config {
-    #[serde(default)]
-    pub impeller: ImpellerConfig,
+    #[serde(default = "default::cmd_analyze_global")]
+    pub cmd_analyze_global: Vec<String>,
+
+    #[serde(default = "default::cmd_analyze_version")]
+    pub cmd_analyze_version: Vec<String>,
+
+    #[serde(default = "default::bubblewrap")]
+    pub bubblewrap: bool,
+
+    #[serde(default = "default::bubblewrap_nixos")]
+    pub bubblewrap_nixos: bool,
+
+    #[serde(default = "default::threads_total")]
+    pub threads_total: usize,
+
+    #[serde(default = "default::threads_analyze_global")]
+    pub threads_analyze_global: usize,
+
+    #[serde(default = "default::threads_analyze_version")]
+    pub threads_analyze_version: usize,
 }
 
 impl Config {

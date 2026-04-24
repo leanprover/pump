@@ -7,6 +7,7 @@ mod somehow;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use clap::Parser;
 
@@ -36,6 +37,14 @@ async fn main() -> anyhow::Result<()> {
         cache: Arc::new(Cache::new(args.cache_dir)),
         queue: Arc::new(Mutex::new(Queue::new())),
     };
+
+    let queue_state = state.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            queue_state.queue.lock().unwrap().update(&queue_state.cache);
+        }
+    });
 
     server::run(state).await
 }
