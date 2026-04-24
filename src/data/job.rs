@@ -17,7 +17,7 @@ pub struct JobQueryV0 {
 
     #[serde(default)]
     pub force_rerun: bool,
-    pub force_rerun_if_older_than_seconds: Option<u64>,
+    pub force_rerun_if_older_than_seconds: Option<i64>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -94,5 +94,13 @@ pub enum JobResult {
 impl From<JobResultV0> for JobResult {
     fn from(value: JobResultV0) -> Self {
         Self::V0(value)
+    }
+}
+
+impl JobResult {
+    pub fn started(&self) -> Timestamp {
+        match self {
+            JobResult::V0(result) => result.started,
+        }
     }
 }

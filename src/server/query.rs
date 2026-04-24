@@ -2,11 +2,12 @@ use std::collections::HashMap;
 
 use axum::Json;
 use axum::extract::State;
+use jiff::{Timestamp, ToSpan};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     AppState,
-    data::job::{JobQuery, JobResult, JobStatus},
+    data::job::{JobQuery, JobQueryV0, JobResult, JobStatus},
 };
 
 #[derive(Deserialize)]
@@ -29,6 +30,7 @@ pub async fn query(
     let mut pending = HashMap::new();
     let mut completed = HashMap::new();
     for (key, job) in body.jobs {
+        let job: JobQueryV0 = job.into();
         let job_id = job.id();
 
         if let Some(status) = queue.status_for(&job_id) {
@@ -37,11 +39,18 @@ pub async fn query(
         }
 
         if let Some(result) = state.cache.get(&job_id) {
-            completed.insert(key, result);
-            continue;
+            let rerun = job.force_rerun
+                || job
+                    .force_rerun_if_older_than_seconds
+                    .map(|seconds| result.started() < Timestamp::now() - seconds.seconds())
+                    .unwrap_or(false);
+            if !rerun {
+                completed.insert(key, result);
+                continue;
+            }
         }
 
-        let status = queue.enqueue(job.into());
+        let status = queue.enqueue(job);
         pending.insert(key, status);
     }
 
