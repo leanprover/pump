@@ -40,9 +40,12 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let config = Config::load(&args.config)?;
 
+    let cache = Cache::new(args.cache_dir);
+    cache.fix_entries()?;
+
     let state = AppState {
         config: Box::leak(Box::new(config)),
-        cache: Arc::new(Cache::new(args.cache_dir)),
+        cache: Arc::new(cache),
         queue: Arc::new(Mutex::new(Queue::new())),
     };
 
