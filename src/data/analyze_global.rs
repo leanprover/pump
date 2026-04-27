@@ -16,6 +16,12 @@ pub enum Input {
     V0(InputV0),
 }
 
+impl From<InputV0> for Input {
+    fn from(value: InputV0) -> Self {
+        Self::V0(value)
+    }
+}
+
 impl From<Input> for InputV0 {
     fn from(value: Input) -> Self {
         match value {

@@ -5,12 +5,15 @@ use tokio::sync::oneshot::{self, error::TryRecvError};
 
 use crate::{
     AppState,
-    cache::{Cache, JobId},
-    data::job::{JobQueryV0, JobResultV0, JobStatus, JobStatusV0},
+    cache::Cache,
+    data::{
+        job::{JobQueryV0, JobResultV0, JobStatus, JobStatusV0},
+        job_input::JobInput,
+    },
 };
 
 struct Job {
-    query: JobQueryV0,
+    input: JobInput,
     queried: Timestamp,
     started: Option<Timestamp>,
     result: Option<oneshot::Receiver<JobResultV0>>,
@@ -19,7 +22,7 @@ struct Job {
 impl Job {
     fn status(&self) -> JobStatus {
         JobStatusV0 {
-            data: self.query.data.clone(),
+            data: self.input.clone().into(),
             queued: self.queried,
             started: self.started,
         }
@@ -58,21 +61,21 @@ impl Queue {
         Self::default()
     }
 
-    pub fn status_for(&self, data: &JobId) -> Option<JobStatus> {
+    pub fn status_for(&self, data: &JobInput) -> Option<JobStatus> {
         self.0
             .iter()
-            .find(|job| job.query.id() == *data)
+            .find(|job| job.input == *data)
             .map(|job| job.status())
     }
 
     pub fn enqueue(&mut self, query: JobQueryV0) -> JobStatus {
-        let job_id: JobId = query.id();
-        if let Some(status) = self.status_for(&job_id) {
+        let input = query.input();
+        if let Some(status) = self.status_for(&input) {
             return status; // Already enqueued
         }
 
         let job = Job {
-            query,
+            input,
             queried: Timestamp::now(),
             started: None,
             result: None,

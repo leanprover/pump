@@ -30,27 +30,26 @@ pub async fn query(
     let mut pending = HashMap::new();
     let mut completed = HashMap::new();
     for (key, job) in body.jobs {
-        let job: JobQueryV0 = job.into();
-        let job_id = job.id();
+        let query: JobQueryV0 = job.into();
+        let input = query.input();
 
-        if let Some(status) = queue.status_for(&job_id) {
+        if let Some(status) = queue.status_for(&input) {
             pending.insert(key, status);
             continue;
         }
 
-        if let Some(result) = state.cache.get(&job_id) {
-            let rerun = job.force_rerun
-                || job
-                    .force_rerun_if_older_than_seconds
-                    .map(|seconds| result.started() < Timestamp::now() - seconds.seconds())
-                    .unwrap_or(false);
+        if let Some(result) = state.cache.get(&input) {
+            let rerun = query
+                .force_rerun_if_older_than_seconds
+                .map(|seconds| result.finished() < Timestamp::now() - seconds.seconds())
+                .unwrap_or(false);
             if !rerun {
                 completed.insert(key, result);
                 continue;
             }
         }
 
-        let status = queue.enqueue(job);
+        let status = queue.enqueue(query);
         pending.insert(key, status);
     }
 

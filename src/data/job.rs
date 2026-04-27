@@ -15,8 +15,6 @@ pub struct JobQueryV0 {
     #[serde(flatten)]
     pub data: JobQueryDataV0,
 
-    #[serde(default)]
-    pub force_rerun: bool,
     pub force_rerun_if_older_than_seconds: Option<i64>,
 }
 
@@ -98,9 +96,9 @@ impl From<JobResultV0> for JobResult {
 }
 
 impl JobResult {
-    pub fn started(&self) -> Timestamp {
+    pub fn finished(&self) -> Timestamp {
         match self {
-            JobResult::V0(result) => result.started,
+            JobResult::V0(result) => result.finished,
         }
     }
 }
