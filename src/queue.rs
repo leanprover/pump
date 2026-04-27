@@ -1,4 +1,7 @@
-use std::{collections::VecDeque, time::Duration};
+use std::{
+    collections::{HashSet, VecDeque},
+    time::Duration,
+};
 
 use jiff::Timestamp;
 use tokio::sync::oneshot::{self, error::TryRecvError};
@@ -7,9 +10,11 @@ use crate::{
     AppState,
     cache::Cache,
     data::{
+        common::SourceV0,
         job::{JobQueryV0, JobResultV0, JobStatus, JobStatusV0},
         job_input::JobInput,
     },
+    impeller,
 };
 
 struct Job {
@@ -89,8 +94,37 @@ impl Queue {
         self.0.iter().map(|job| job.status()).collect()
     }
 
+    /// Remove finished jobs from the queue.
     pub fn finish(&mut self, cache: &Cache) {
         self.0.retain_mut(|job| job.finish(cache));
+    }
+}
+
+fn start_job(state: &AppState, job: &mut Job) {
+    assert!(job.result.is_none());
+
+    let (tx, rx) = oneshot::channel();
+    job.started = Some(Timestamp::now());
+    job.result = Some(rx);
+
+    let config = state.config;
+    let input = job.input.clone();
+    tokio::spawn(async move {
+        match impeller::run(config, &input).await {
+            Ok(result) => {
+                let _ = tx.send(result);
+            }
+            Err(_) => {
+                // TODO Log error
+            }
+        }
+    });
+}
+
+fn threads_for_job(state: &AppState, job: &Job) -> usize {
+    match &job.input {
+        JobInput::AnalyzeGlobal { .. } => state.config.threads_analyze_global,
+        JobInput::AnalyzeVersion { .. } => state.config.threads_analyze_version,
     }
 }
 
@@ -99,6 +133,34 @@ pub async fn run(state: AppState) -> anyhow::Result<()> {
         tokio::time::sleep(Duration::from_secs(1)).await;
         let mut queue = state.queue.lock().unwrap();
         queue.finish(&state.cache);
-        // TODO Start pending jobs
+
+        let mut active_threads = 0_usize;
+        let mut active_sources = HashSet::<SourceV0>::new();
+        for job in queue.0.iter() {
+            if job.result.is_some() {
+                active_threads += threads_for_job(&state, job);
+                active_sources.insert(job.input.source().clone());
+            }
+        }
+
+        // Jobs need to be executed in queue order, or else a large job with
+        // lots of threads may never receive sufficient threads because later
+        // small jobs keep taking up some amount of threads.
+        for job in queue.0.iter_mut() {
+            if job.result.is_some() {
+                continue; // Already running
+            }
+
+            let threads = threads_for_job(&state, job);
+            if active_threads + threads > state.config.threads_total {
+                break; // Not enough threads available
+            };
+
+            if active_sources.contains(job.input.source()) {
+                break; // Another job is already running for this source
+            }
+
+            start_job(&state, job);
+        }
     }
 }

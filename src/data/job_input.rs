@@ -3,6 +3,7 @@ use sha2::{Digest, Sha256};
 
 use crate::data::{
     analyze_global, analyze_version,
+    common::SourceV0,
     job::{JobQueryDataV0, JobQueryV0, JobResult, JobResultDataV0, JobResultV0},
 };
 
@@ -18,6 +19,13 @@ impl JobInput {
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect())
+    }
+
+    pub fn source(&self) -> &SourceV0 {
+        match self {
+            JobInput::AnalyzeGlobal { input } => &input.source,
+            JobInput::AnalyzeVersion { input } => &input.source,
+        }
     }
 }
 
