@@ -4,12 +4,16 @@ use anyhow::Context;
 use serde::Deserialize;
 
 mod default {
-    pub(super) fn cmd_analyze_global() -> Vec<String> {
-        vec!["impeller-analyze-global".to_string()]
+    pub(super) fn cmd_analyze_global() -> String {
+        "impeller-analyze-global".to_string()
     }
 
-    pub(super) fn cmd_analyze_version() -> Vec<String> {
-        vec!["impeller-analyze-version".to_string()]
+    pub(super) fn cmd_analyze_version() -> String {
+        "impeller-analyze-version".to_string()
+    }
+
+    pub(super) fn cmd_empty_args() -> Vec<String> {
+        vec![]
     }
 
     pub(super) fn bubblewrap() -> bool {
@@ -36,10 +40,16 @@ mod default {
 #[derive(Deserialize)]
 pub struct Config {
     #[serde(default = "default::cmd_analyze_global")]
-    pub cmd_analyze_global: Vec<String>,
+    pub cmd_analyze_global: String,
+
+    #[serde(default = "default::cmd_empty_args")]
+    pub cmd_analyze_global_args: Vec<String>,
 
     #[serde(default = "default::cmd_analyze_version")]
-    pub cmd_analyze_version: Vec<String>,
+    pub cmd_analyze_version: String,
+
+    #[serde(default = "default::cmd_empty_args")]
+    pub cmd_analyze_version_args: Vec<String>,
 
     #[serde(default = "default::bubblewrap")]
     pub bubblewrap: bool,

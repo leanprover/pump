@@ -19,7 +19,7 @@ use crate::{
 
 struct Job {
     input: JobInput,
-    queried: Timestamp,
+    queued: Timestamp,
     started: Option<Timestamp>,
     result: Option<oneshot::Receiver<JobResultV0>>,
 }
@@ -28,7 +28,7 @@ impl Job {
     fn status(&self) -> JobStatus {
         JobStatusV0 {
             data: self.input.clone().into(),
-            queued: self.queried,
+            queued: self.queued,
             started: self.started,
         }
         .into()
@@ -81,7 +81,7 @@ impl Queue {
 
         let job = Job {
             input,
-            queried: Timestamp::now(),
+            queued: Timestamp::now(),
             started: None,
             result: None,
         };
@@ -103,14 +103,17 @@ impl Queue {
 fn start_job(state: &AppState, job: &mut Job) {
     assert!(job.result.is_none());
 
+    let state = state.clone();
+    let input = job.input.clone();
+    let queued = job.queued;
+    let started = Timestamp::now();
+
     let (tx, rx) = oneshot::channel();
-    job.started = Some(Timestamp::now());
+    job.started = Some(started);
     job.result = Some(rx);
 
-    let config = state.config;
-    let input = job.input.clone();
     tokio::spawn(async move {
-        match impeller::run(config, &input).await {
+        match impeller::run(&state, &input, queued, started).await {
             Ok(result) => {
                 let _ = tx.send(result);
             }

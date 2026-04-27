@@ -80,7 +80,7 @@ pub struct JobResultV0 {
     pub queued: Timestamp,
     pub started: Timestamp,
     pub finished: Timestamp,
-    pub exit_code: u8,
+    pub exit_code: i32,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

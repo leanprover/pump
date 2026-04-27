@@ -1,13 +1,13 @@
 mod cache;
 mod config;
 mod data;
+mod impeller;
 mod queue;
 mod server;
 mod somehow;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use clap::Parser;
 use tokio::select;
@@ -19,6 +19,7 @@ use crate::queue::Queue;
 #[derive(Clone)]
 struct AppState {
     pub config: &'static Config,
+    pub repos_dir: &'static Path,
     pub cache: Arc<Cache>,
     pub queue: Arc<Mutex<Queue>>,
 }
@@ -32,21 +33,25 @@ struct Args {
     cache_dir: PathBuf,
 
     #[arg(long, default_value = "repos")]
-    repo_dir: PathBuf,
+    repos_dir: PathBuf,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    let config = Config::load(&args.config)?;
+    let config = Box::leak(Box::new(Config::load(&args.config)?));
+    let repos_dir = Box::leak(Box::new(args.repos_dir));
 
     let cache = Cache::new(args.cache_dir);
+    let queue = Queue::new();
+
     cache.fix_entries()?;
 
     let state = AppState {
-        config: Box::leak(Box::new(config)),
+        config,
+        repos_dir,
         cache: Arc::new(cache),
-        queue: Arc::new(Mutex::new(Queue::new())),
+        queue: Arc::new(Mutex::new(queue)),
     };
 
     let state_queue = state.clone();
