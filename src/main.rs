@@ -6,6 +6,7 @@ mod queue;
 mod server;
 mod somehow;
 
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -40,8 +41,11 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let config = Box::leak(Box::new(Config::load(&args.config)?));
-    let repos_dir = Box::leak(Box::new(args.repos_dir));
 
+    fs::create_dir_all(&args.cache_dir)?;
+    fs::create_dir_all(&args.repos_dir)?;
+
+    let repos_dir = Box::leak(Box::new(args.repos_dir));
     let cache = Cache::new(args.cache_dir);
     let queue = Queue::new();
 
