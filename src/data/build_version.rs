@@ -1,7 +1,6 @@
-use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::data::common::SourceV0;
+use crate::data::common::{SourceV0, TimesV0};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputV0 {
@@ -35,22 +34,23 @@ impl From<Input> for InputV0 {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CommandV0 {
     pub success: bool,
-    // Timings
-    pub started: Timestamp,
-    pub finished: Timestamp,
+
+    #[serde(flatten)]
+    pub times: TimesV0,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OutputV0 {
+    pub sha: String,
     pub check_build: Option<bool>,
     pub check_test: Option<bool>,
     pub check_lint: Option<bool>,
     pub build: Option<CommandV0>,
     pub test: Option<CommandV0>,
     pub lint: Option<CommandV0>,
-    // Timings
-    pub started: Timestamp,
-    pub finished: Timestamp,
+
+    #[serde(flatten)]
+    pub times: TimesV0,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

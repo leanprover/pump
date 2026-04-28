@@ -1,8 +1,7 @@
-use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::data::common::SourceV0;
+use crate::data::common::{SourceV0, TimesV0};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputV0 {
@@ -41,15 +40,16 @@ pub struct LakeV0 {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OutputV0 {
-    pub lake: Option<LakeV0>,
+    pub sha: String,
     pub toolchain: Option<String>,
     pub manifest: Option<Value>,
+    pub lake: Option<LakeV0>,
     pub check_build: Option<bool>,
     pub check_test: Option<bool>,
     pub check_lint: Option<bool>,
-    // Timings
-    pub started: Timestamp,
-    pub finished: Timestamp,
+
+    #[serde(flatten)]
+    pub times: TimesV0,
 }
 
 #[derive(Clone, Serialize, Deserialize)]

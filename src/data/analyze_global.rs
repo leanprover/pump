@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::data::common::SourceV0;
+use crate::data::common::{SourceV0, TimesV0};
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputV0 {
@@ -75,9 +75,9 @@ pub struct OutputV0 {
     pub git: GitV0,
     pub lake: Option<LakeV0>,
     pub github: Option<GithubV0>,
-    // Timings
-    pub started: Timestamp,
-    pub finished: Timestamp,
+
+    #[serde(flatten)]
+    pub times: TimesV0,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
