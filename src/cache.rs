@@ -3,6 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use log::info;
+
 use crate::data::{job::JobResult, job_input::JobInput};
 
 pub struct Cache {
@@ -66,7 +68,7 @@ impl Cache {
             let result = Self::load_result(&path)?;
             let target_path = self.path_for_key(&result.input())?;
             if target_path != path {
-                println!("Moving {:?} to {:?}", path, target_path);
+                info!("Moving {:?} to {:?}", path, target_path);
                 fs::rename(path, target_path)?;
             }
         }

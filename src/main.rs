@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use clap::Parser;
+use log::info;
 use tokio::select;
 
 use crate::cache::Cache;
@@ -39,8 +40,11 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
     let args = Args::parse();
     let config = Box::leak(Box::new(Config::load(&args.config)?));
+    info!("Threads available: {}", config.queue.threads_total);
 
     fs::create_dir_all(&args.cache_dir)?;
     fs::create_dir_all(&args.repos_dir)?;

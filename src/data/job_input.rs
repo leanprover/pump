@@ -7,7 +7,7 @@ use crate::data::{
     job::{JobQueryDataV0, JobQueryV0, JobResult, JobResultDataV0, JobResultV0},
 };
 
-#[derive(Clone, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum JobInput {
     AnalyzeGlobal { input: analyze_global::InputV0 },
     AnalyzeVersion { input: analyze_version::InputV0 },

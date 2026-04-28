@@ -1,6 +1,7 @@
 use std::{fs, path::PathBuf, process::Command};
 
 use jiff::Timestamp;
+use log::debug;
 use serde::de::DeserializeOwned;
 use tempfile::NamedTempFile;
 
@@ -46,6 +47,8 @@ async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
     cmd.arg("--repo").arg(repo_dir_for_source(state, source));
     cmd.arg("--url").arg(url_for_source(source));
     cmd.arg("--output").arg(output_file.path());
+
+    debug!("Running command: {:?}", cmd);
 
     let status = tokio::task::spawn_blocking(move || cmd.status()).await??;
     let exit_code = status.code().unwrap_or(-1);

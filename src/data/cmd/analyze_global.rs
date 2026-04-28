@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::data::common::{SourceV0, TimesV0};
 
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputV0 {
     pub source: SourceV0,
 }

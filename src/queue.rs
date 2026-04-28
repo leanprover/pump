@@ -4,6 +4,7 @@ use std::{
 };
 
 use jiff::Timestamp;
+use log::{error, info};
 use tokio::sync::oneshot::{self, error::TryRecvError};
 
 use crate::{
@@ -41,15 +42,24 @@ impl Job {
 
         match rx.try_recv() {
             Ok(result) => match cache.put(result.into()) {
-                Ok(()) => true,
-                Err(_) => false, // TODO Log error
+                Ok(()) => {
+                    info!("Finished {:?}", self.input);
+                    true
+                }
+                Err(e) => {
+                    error!("Failed to cache result for {:?}: {e}", self.input);
+                    false
+                }
             },
             Err(TryRecvError::Empty) => false,
             Err(TryRecvError::Closed) => {
                 // The worker task has aborted in some way without providing any
                 // result. This shouldn't normally happen, but if it does, we'll
                 // just try again.
-                // TODO Log warning
+                log::warn!(
+                    "Worker aborted without result for {:?}, re-queuing",
+                    self.input
+                );
                 self.started = None;
                 self.result = None;
                 false
@@ -79,6 +89,7 @@ impl Queue {
             return status; // Already enqueued
         }
 
+        info!("Enqueued {input:?}");
         let job = Job {
             input,
             queued: Timestamp::now(),
@@ -108,17 +119,19 @@ fn start_job(state: &AppState, job: &mut Job) {
     let queued = job.queued;
     let started = Timestamp::now();
 
+    info!("Started {input:?}");
+
     let (tx, rx) = oneshot::channel();
     job.started = Some(started);
     job.result = Some(rx);
 
     tokio::spawn(async move {
-        match impeller::run(state, input, queued, started).await {
+        match impeller::run(state, input.clone(), queued, started).await {
             Ok(result) => {
                 let _ = tx.send(result);
             }
-            Err(_) => {
-                // TODO Log error
+            Err(e) => {
+                error!("Impeller failed for {input:?}: {e}");
             }
         }
     });
