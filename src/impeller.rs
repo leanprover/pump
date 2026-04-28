@@ -64,6 +64,7 @@ async fn run_analyze_global(
     input: analyze_global::InputV0,
 ) -> anyhow::Result<JobResultV0> {
     let mut cmd = Command::new(&ctx.state.config.impeller.cmd);
+    cmd.arg("analyze-global");
     cmd.args(&ctx.state.config.impeller.args);
     cmd.args(&ctx.state.config.impeller.args_analyze_global);
 
@@ -88,6 +89,7 @@ async fn run_analyze_version(
     input: analyze_version::InputV0,
 ) -> anyhow::Result<JobResultV0> {
     let mut cmd = Command::new(&ctx.state.config.impeller.cmd);
+    cmd.arg("analyze-version");
     cmd.args(&ctx.state.config.impeller.args);
     cmd.args(&ctx.state.config.impeller.args_analyze_version);
     cmd.arg("--sha").arg(&input.sha);
@@ -113,6 +115,7 @@ async fn run_build_version(
     input: build_version::InputV0,
 ) -> anyhow::Result<JobResultV0> {
     let mut cmd = Command::new(&ctx.state.config.impeller.cmd);
+    cmd.arg("build-version");
     cmd.args(&ctx.state.config.impeller.args);
     cmd.args(&ctx.state.config.impeller.args_build_version);
     cmd.arg("--sha").arg(&input.sha);
