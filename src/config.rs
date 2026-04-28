@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{fs, io::ErrorKind, path::Path};
 
 use anyhow::Context;
 use serde::Deserialize;
@@ -66,10 +66,19 @@ pub struct Config {
     pub queue: Queue,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        serde_json::from_value(Value::Object(Map::new())).unwrap()
+    }
+}
+
 impl Config {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
-        let text = fs::read_to_string(path)
-            .with_context(|| format!("failed to read {}", path.display()))?;
+        let text = match fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == ErrorKind::NotFound => return Ok(Self::default()),
+            Err(e) => Err(e).with_context(|| format!("failed to read {}", path.display()))?,
+        };
         let config =
             toml::from_str(&text).with_context(|| format!("failed to parse {}", path.display()))?;
         Ok(config)
