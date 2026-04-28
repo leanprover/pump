@@ -1,0 +1,4 @@
+# A small example config
+[impeller]
+args = ["--bubblewrap"]
+args_analyze_global = ["--fetch-external-metadata", "--github-token-gh"]
