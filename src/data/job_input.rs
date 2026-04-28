@@ -2,7 +2,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use crate::data::{
-    analyze_global, analyze_version, build_version,
+    cmd::{analyze_global, analyze_version, build_version},
     common::SourceV0,
     job::{JobQueryDataV0, JobQueryV0, JobResult, JobResultDataV0, JobResultV0},
 };

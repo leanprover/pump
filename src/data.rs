@@ -1,6 +1,4 @@
-pub mod analyze_global;
-pub mod analyze_version;
-pub mod build_version;
+pub mod cmd;
 pub mod common;
 pub mod job;
 pub mod job_input;

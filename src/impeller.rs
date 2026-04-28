@@ -7,7 +7,7 @@ use tempfile::NamedTempFile;
 use crate::{
     AppState,
     data::{
-        analyze_global, analyze_version, build_version,
+        cmd::{analyze_global, analyze_version, build_version},
         common::SourceV0,
         job::{JobResultDataV0, JobResultV0},
         job_input::JobInput,

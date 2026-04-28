@@ -1,9 +1,7 @@
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::data::build_version;
-
-use super::{analyze_global, analyze_version};
+use crate::data::cmd::{analyze_global, analyze_version, build_version};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
