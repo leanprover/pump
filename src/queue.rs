@@ -4,7 +4,7 @@ use std::{
 };
 
 use jiff::Timestamp;
-use log::{error, info};
+use log::{debug, error, info};
 use tokio::sync::oneshot::{self, error::TryRecvError};
 
 use crate::{
@@ -107,7 +107,10 @@ impl Queue {
 
     /// Remove finished jobs from the queue.
     pub fn finish(&mut self, cache: &Cache) {
-        self.0.retain_mut(|job| job.finish(cache));
+        let before = self.0.len();
+        self.0.retain_mut(|job| !job.finish(cache));
+        let after = self.0.len();
+        debug!("Finished jobs: {before} -> {after} ({})", before - after);
     }
 }
 
