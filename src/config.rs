@@ -2,69 +2,58 @@ use std::{fs, path::Path};
 
 use anyhow::Context;
 use serde::Deserialize;
+use serde_json::{Map, Value};
 
 mod default {
-    pub(super) fn cmd_analyze_global() -> String {
-        "impeller-analyze-global".to_string()
+    pub(super) fn impeller_cmd() -> String {
+        "impeller".to_string()
     }
 
-    pub(super) fn cmd_analyze_version() -> String {
-        "impeller-analyze-version".to_string()
-    }
-
-    pub(super) fn cmd_empty_args() -> Vec<String> {
-        vec![]
-    }
-
-    pub(super) fn bubblewrap() -> bool {
-        true
-    }
-
-    pub(super) fn bubblewrap_nixos() -> bool {
-        false
-    }
-
-    pub(super) fn threads_total() -> usize {
+    pub(super) fn queue_threads_total() -> usize {
         num_cpus::get()
     }
+}
 
-    pub(super) fn threads_analyze_global() -> usize {
-        1
+#[derive(Deserialize)]
+pub struct Impeller {
+    #[serde(default = "default::impeller_cmd")]
+    pub cmd: String,
+
+    #[serde(default)]
+    pub args: Vec<String>,
+
+    #[serde(default)]
+    pub args_analyze_global: Vec<String>,
+
+    #[serde(default)]
+    pub args_analyze_version: Vec<String>,
+}
+
+impl Default for Impeller {
+    fn default() -> Self {
+        serde_json::from_value(Value::Object(Map::new())).unwrap()
     }
+}
 
-    pub(super) fn threads_analyze_version() -> usize {
-        1
+#[derive(Deserialize)]
+pub struct Queue {
+    #[serde(default = "default::queue_threads_total")]
+    pub threads_total: usize,
+}
+
+impl Default for Queue {
+    fn default() -> Self {
+        serde_json::from_value(Value::Object(Map::new())).unwrap()
     }
 }
 
 #[derive(Deserialize)]
 pub struct Config {
-    #[serde(default = "default::cmd_analyze_global")]
-    pub cmd_analyze_global: String,
+    #[serde(default)]
+    pub impeller: Impeller,
 
-    #[serde(default = "default::cmd_empty_args")]
-    pub cmd_analyze_global_args: Vec<String>,
-
-    #[serde(default = "default::cmd_analyze_version")]
-    pub cmd_analyze_version: String,
-
-    #[serde(default = "default::cmd_empty_args")]
-    pub cmd_analyze_version_args: Vec<String>,
-
-    #[serde(default = "default::bubblewrap")]
-    pub bubblewrap: bool,
-
-    #[serde(default = "default::bubblewrap_nixos")]
-    pub bubblewrap_nixos: bool,
-
-    #[serde(default = "default::threads_total")]
-    pub threads_total: usize,
-
-    #[serde(default = "default::threads_analyze_global")]
-    pub threads_analyze_global: usize,
-
-    #[serde(default = "default::threads_analyze_version")]
-    pub threads_analyze_version: usize,
+    #[serde(default)]
+    pub queue: Queue,
 }
 
 impl Config {

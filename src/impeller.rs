@@ -39,13 +39,7 @@ async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
     cmd.arg("--url").arg(url_for_source(source));
     cmd.arg("--output").arg(output_file.path());
 
-    if state.config.bubblewrap {
-        cmd.arg("--bubblewrap");
-    }
-
-    if state.config.bubblewrap_nixos {
-        cmd.arg("--bubblewrap-nixos");
-    }
+    // TODO Github token file
 
     let status = tokio::task::spawn_blocking(move || cmd.status()).await??;
     let exit_code = status.code().unwrap_or(-1);
@@ -62,8 +56,9 @@ async fn run_analyze_global(
     queued: Timestamp,
     started: Timestamp,
 ) -> anyhow::Result<JobResultV0> {
-    let mut cmd = Command::new(&state.config.cmd_analyze_global);
-    cmd.args(&state.config.cmd_analyze_global_args);
+    let mut cmd = Command::new(&state.config.impeller.cmd);
+    cmd.args(&state.config.impeller.args);
+    cmd.args(&state.config.impeller.args_analyze_global);
 
     let (exit_code, output) =
         run_command_and_parse_result::<analyze_global::Output>(state, &input.source, cmd).await?;
@@ -86,8 +81,9 @@ async fn run_analyze_version(
     queued: Timestamp,
     started: Timestamp,
 ) -> anyhow::Result<JobResultV0> {
-    let mut cmd = Command::new(&state.config.cmd_analyze_version);
-    cmd.args(&state.config.cmd_analyze_version_args);
+    let mut cmd = Command::new(&state.config.impeller.cmd);
+    cmd.args(&state.config.impeller.args);
+    cmd.args(&state.config.impeller.args_analyze_version);
     cmd.arg("--sha").arg(&input.sha);
 
     let (exit_code, output) =

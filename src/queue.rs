@@ -126,8 +126,8 @@ fn start_job(state: &AppState, job: &mut Job) {
 
 fn threads_for_job(state: &AppState, job: &Job) -> usize {
     match &job.input {
-        JobInput::AnalyzeGlobal { .. } => state.config.threads_analyze_global,
-        JobInput::AnalyzeVersion { .. } => state.config.threads_analyze_version,
+        JobInput::AnalyzeGlobal { .. } => 1,
+        JobInput::AnalyzeVersion { .. } => 1,
     }
 }
 
@@ -155,7 +155,7 @@ pub async fn run(state: AppState) -> anyhow::Result<()> {
             }
 
             let threads = threads_for_job(&state, job);
-            if active_threads + threads > state.config.threads_total {
+            if active_threads + threads > state.config.queue.threads_total {
                 break; // Not enough threads available
             };
 
