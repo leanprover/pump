@@ -1,6 +1,8 @@
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
+use crate::data::build_version;
+
 use super::{analyze_global, analyze_version};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -8,6 +10,7 @@ use super::{analyze_global, analyze_version};
 pub enum JobQueryDataV0 {
     AnalyzeGlobal { input: analyze_global::Input },
     AnalyzeVersion { input: analyze_version::Input },
+    BuildVersion { input: build_version::Input },
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -69,6 +72,10 @@ pub enum JobResultDataV0 {
     AnalyzeVersion {
         input: analyze_version::Input,
         output: Option<analyze_version::Output>,
+    },
+    BuildVersion {
+        input: build_version::Input,
+        output: Option<build_version::Output>,
     },
 }
 

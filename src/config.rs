@@ -12,6 +12,10 @@ mod default {
     pub(super) fn queue_threads_total() -> usize {
         num_cpus::get()
     }
+
+    pub(super) fn queue_threads_build_version() -> usize {
+        8
+    }
 }
 
 #[derive(Deserialize)]
@@ -27,6 +31,9 @@ pub struct Impeller {
 
     #[serde(default)]
     pub args_analyze_version: Vec<String>,
+
+    #[serde(default)]
+    pub args_build_version: Vec<String>,
 }
 
 impl Default for Impeller {
@@ -39,6 +46,9 @@ impl Default for Impeller {
 pub struct Queue {
     #[serde(default = "default::queue_threads_total")]
     pub threads_total: usize,
+
+    #[serde(default = "default::queue_threads_build_version")]
+    pub threads_build_version: usize,
 }
 
 impl Default for Queue {

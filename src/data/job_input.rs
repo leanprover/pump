@@ -2,7 +2,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 
 use crate::data::{
-    analyze_global, analyze_version,
+    analyze_global, analyze_version, build_version,
     common::SourceV0,
     job::{JobQueryDataV0, JobQueryV0, JobResult, JobResultDataV0, JobResultV0},
 };
@@ -11,6 +11,7 @@ use crate::data::{
 pub enum JobInput {
     AnalyzeGlobal { input: analyze_global::InputV0 },
     AnalyzeVersion { input: analyze_version::InputV0 },
+    BuildVersion { input: build_version::InputV0 },
 }
 
 impl JobInput {
@@ -25,6 +26,7 @@ impl JobInput {
         match self {
             JobInput::AnalyzeGlobal { input } => &input.source,
             JobInput::AnalyzeVersion { input } => &input.source,
+            JobInput::BuildVersion { input } => &input.source,
         }
     }
 }
@@ -38,6 +40,9 @@ impl From<JobQueryDataV0> for JobInput {
             JobQueryDataV0::AnalyzeVersion { input } => Self::AnalyzeVersion {
                 input: input.into(),
             },
+            JobQueryDataV0::BuildVersion { input } => Self::BuildVersion {
+                input: input.into(),
+            },
         }
     }
 }
@@ -49,6 +54,9 @@ impl From<JobInput> for JobQueryDataV0 {
                 input: input.into(),
             },
             JobInput::AnalyzeVersion { input } => Self::AnalyzeVersion {
+                input: input.into(),
+            },
+            JobInput::BuildVersion { input } => Self::BuildVersion {
                 input: input.into(),
             },
         }
@@ -68,6 +76,9 @@ impl JobResultDataV0 {
                 input: input.clone().into(),
             },
             JobResultDataV0::AnalyzeVersion { input, .. } => JobInput::AnalyzeVersion {
+                input: input.clone().into(),
+            },
+            JobResultDataV0::BuildVersion { input, .. } => JobInput::BuildVersion {
                 input: input.clone().into(),
             },
         }

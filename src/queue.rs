@@ -113,7 +113,7 @@ fn start_job(state: &AppState, job: &mut Job) {
     job.result = Some(rx);
 
     tokio::spawn(async move {
-        match impeller::run(&state, &input, queued, started).await {
+        match impeller::run(state, input, queued, started).await {
             Ok(result) => {
                 let _ = tx.send(result);
             }
@@ -122,13 +122,6 @@ fn start_job(state: &AppState, job: &mut Job) {
             }
         }
     });
-}
-
-fn threads_for_job(state: &AppState, job: &Job) -> usize {
-    match &job.input {
-        JobInput::AnalyzeGlobal { .. } => 1,
-        JobInput::AnalyzeVersion { .. } => 1,
-    }
 }
 
 pub async fn run(state: AppState) -> anyhow::Result<()> {
@@ -141,7 +134,7 @@ pub async fn run(state: AppState) -> anyhow::Result<()> {
         let mut active_sources = HashSet::<SourceV0>::new();
         for job in queue.0.iter() {
             if job.result.is_some() {
-                active_threads += threads_for_job(&state, job);
+                active_threads += impeller::threads_for_input(&state, &job.input);
                 active_sources.insert(job.input.source().clone());
             }
         }
@@ -154,7 +147,7 @@ pub async fn run(state: AppState) -> anyhow::Result<()> {
                 continue; // Already running
             }
 
-            let threads = threads_for_job(&state, job);
+            let threads = impeller::threads_for_input(&state, &job.input);
             if active_threads + threads > state.config.queue.threads_total {
                 break; // Not enough threads available
             };
