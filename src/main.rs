@@ -4,7 +4,6 @@ mod data;
 mod impeller;
 mod queue;
 mod server;
-mod somehow;
 
 use std::fs;
 use std::path::{Path, PathBuf};
