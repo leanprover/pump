@@ -1,4 +1,8 @@
-use std::{fs, path::PathBuf, process::Command};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use jiff::Timestamp;
 use log::{debug, error};
@@ -37,11 +41,17 @@ pub fn threads_for_input(state: &AppState, input: &JobInput) -> usize {
     }
 }
 
+fn read_json_output<T: DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
+    let json = fs::read_to_string(path)?;
+    let result = serde_json::from_str::<T>(&json)?;
+    Ok(result)
+}
+
 async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
     state: &AppState,
     source: &SourceV0,
     mut cmd: Command,
-) -> anyhow::Result<(i32, T)> {
+) -> anyhow::Result<(i32, Option<T>)> {
     let output_file = NamedTempFile::new()?;
 
     cmd.arg("--repo").arg(repo_dir_for_source(state, source));
@@ -59,9 +69,7 @@ async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
         error!("Command: {cmd_str}\nExit code: {exit_code}\nStdout:\n{stdout}\nStderr:\n{stderr}");
     }
 
-    let json = fs::read_to_string(&output_file)?;
-    let result = serde_json::from_str::<T>(&json)?;
-
+    let result = read_json_output(output_file.path()).ok();
     Ok((exit_code, result))
 }
 
@@ -81,7 +89,7 @@ async fn run_analyze_global(
     Ok(JobResultV0 {
         data: JobResultDataV0::AnalyzeGlobal {
             input: input.clone().into(),
-            output: output.into(),
+            output,
         },
         queued: ctx.queued,
         started: ctx.started,
@@ -107,7 +115,7 @@ async fn run_analyze_version(
     Ok(JobResultV0 {
         data: JobResultDataV0::AnalyzeVersion {
             input: input.clone().into(),
-            output: output.into(),
+            output,
         },
         queued: ctx.queued,
         started: ctx.started,
@@ -156,7 +164,7 @@ async fn run_build_version(
     Ok(JobResultV0 {
         data: JobResultDataV0::BuildVersion {
             input: input.clone().into(),
-            output: output.into(),
+            output,
         },
         queued: ctx.queued,
         started: ctx.started,
