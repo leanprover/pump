@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf, process::Command};
 
 use jiff::Timestamp;
-use log::debug;
+use log::{debug, error};
 use serde::de::DeserializeOwned;
 use tempfile::NamedTempFile;
 
@@ -48,10 +48,16 @@ async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
     cmd.arg("--url").arg(url_for_source(source));
     cmd.arg("--output").arg(output_file.path());
 
-    debug!("Running command: {:?}", cmd);
+    let cmd_str = format!("{:?}", cmd);
+    debug!("Running command: {}", cmd_str);
 
-    let status = tokio::task::spawn_blocking(move || cmd.status()).await??;
-    let exit_code = status.code().unwrap_or(-1);
+    let output = tokio::task::spawn_blocking(move || cmd.output()).await??;
+    let exit_code = output.status.code().unwrap_or(-1);
+    if exit_code != 0 {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        error!("Command: {cmd_str}\nExit code: {exit_code}\nStdout:\n{stdout}\nStderr:\n{stderr}");
+    }
 
     let json = fs::read_to_string(&output_file)?;
     let result = serde_json::from_str::<T>(&json)?;
