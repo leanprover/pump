@@ -106,7 +106,7 @@ async fn run_analyze_version(
     cmd.arg("analyze-version");
     cmd.args(&ctx.state.config.impeller.args);
     cmd.args(&ctx.state.config.impeller.args_analyze_version);
-    cmd.arg("--sha").arg(&input.sha);
+    cmd.arg("--rev").arg(&input.sha);
 
     let (exit_code, output) =
         run_command_and_parse_result::<analyze_version::Output>(&ctx.state, &input.source, cmd)
@@ -132,7 +132,7 @@ async fn run_build_version(
     cmd.arg("build-version");
     cmd.args(&ctx.state.config.impeller.args);
     cmd.args(&ctx.state.config.impeller.args_build_version);
-    cmd.arg("--sha").arg(&input.sha);
+    cmd.arg("--rev").arg(&input.sha);
 
     if let Some(build) = input.build {
         match build {
