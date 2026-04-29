@@ -1,1 +1,5 @@
 /target
+
+# Scripts
+/manifest.json
+/uv.lock
