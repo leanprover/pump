@@ -5,6 +5,10 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 
 mod default {
+    pub(super) fn server_addr() -> String {
+        "[::]:5800".to_string()
+    }
+
     pub(super) fn impeller_cmd() -> String {
         "impeller".to_string()
     }
@@ -15,6 +19,18 @@ mod default {
 
     pub(super) fn queue_threads_build_version() -> usize {
         8
+    }
+}
+
+#[derive(Deserialize)]
+pub struct Server {
+    #[serde(default = "default::server_addr")]
+    pub addr: String,
+}
+
+impl Default for Server {
+    fn default() -> Self {
+        serde_json::from_value(Value::Object(Map::new())).unwrap()
     }
 }
 
@@ -59,6 +75,9 @@ impl Default for Queue {
 
 #[derive(Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    pub server: Server,
+
     #[serde(default)]
     pub impeller: Impeller,
 
