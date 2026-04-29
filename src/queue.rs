@@ -155,9 +155,6 @@ pub async fn run(state: AppState) -> anyhow::Result<()> {
             }
         }
 
-        // Jobs need to be executed in queue order, or else a large job with
-        // lots of threads may never receive sufficient threads because later
-        // small jobs keep taking up some amount of threads.
         for job in queue.0.iter_mut() {
             if job.result.is_some() {
                 continue; // Already running
@@ -165,14 +162,16 @@ pub async fn run(state: AppState) -> anyhow::Result<()> {
 
             let threads = impeller::threads_for_input(&state, &job.input);
             if active_threads + threads > state.config.queue.threads_total {
-                break; // Not enough threads available
+                continue; // Not enough threads available
             };
 
             if active_sources.contains(job.input.source()) {
-                break; // Another job is already running for this source
+                continue; // Another job is already running for this source
             }
 
             start_job(&state, job);
+            active_threads += threads;
+            active_sources.insert(job.input.source().clone());
         }
     }
 }
