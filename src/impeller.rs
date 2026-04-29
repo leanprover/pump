@@ -51,7 +51,7 @@ async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
     state: &AppState,
     source: &SourceV0,
     mut cmd: Command,
-) -> anyhow::Result<(i32, Option<T>)> {
+) -> anyhow::Result<(Option<T>, i32, Option<String>, Option<String>)> {
     let output_file = NamedTempFile::new()?;
 
     cmd.arg("--repo").arg(repo_dir_for_source(state, source));
@@ -69,8 +69,15 @@ async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
         error!("Command: {cmd_str}\nExit code: {exit_code}\nStdout:\n{stdout}\nStderr:\n{stderr}");
     }
 
+    let mut stdout = None;
+    let mut stderr = None;
+    if exit_code != 0 {
+        stdout = Some(String::from_utf8_lossy(&output.stdout).to_string());
+        stderr = Some(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
     let result = read_json_output(output_file.path()).ok();
-    Ok((exit_code, result))
+    Ok((result, exit_code, stdout, stderr))
 }
 
 async fn run_analyze_global(
@@ -82,7 +89,7 @@ async fn run_analyze_global(
     cmd.args(&ctx.state.config.impeller.args);
     cmd.args(&ctx.state.config.impeller.args_analyze_global);
 
-    let (exit_code, output) =
+    let (output, exit_code, stdout, stderr) =
         run_command_and_parse_result::<analyze_global::Output>(&ctx.state, &input.source, cmd)
             .await?;
 
@@ -95,6 +102,8 @@ async fn run_analyze_global(
         started: ctx.started,
         finished: Timestamp::now(),
         exit_code,
+        stdout,
+        stderr,
     })
 }
 
@@ -108,7 +117,7 @@ async fn run_analyze_version(
     cmd.args(&ctx.state.config.impeller.args_analyze_version);
     cmd.arg("--rev").arg(&input.sha);
 
-    let (exit_code, output) =
+    let (output, exit_code, stdout, stderr) =
         run_command_and_parse_result::<analyze_version::Output>(&ctx.state, &input.source, cmd)
             .await?;
 
@@ -121,6 +130,8 @@ async fn run_analyze_version(
         started: ctx.started,
         finished: Timestamp::now(),
         exit_code,
+        stdout,
+        stderr,
     })
 }
 
@@ -157,7 +168,7 @@ async fn run_build_version(
 
     cmd.env("LEAN_NUM_THREADS", ctx.threads.to_string());
 
-    let (exit_code, output) =
+    let (output, exit_code, stdout, stderr) =
         run_command_and_parse_result::<build_version::Output>(&ctx.state, &input.source, cmd)
             .await?;
 
@@ -170,6 +181,8 @@ async fn run_build_version(
         started: ctx.started,
         finished: Timestamp::now(),
         exit_code,
+        stdout,
+        stderr,
     })
 }
 

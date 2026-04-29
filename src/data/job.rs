@@ -88,7 +88,10 @@ pub struct JobResultV0 {
     pub queued: Timestamp,
     pub started: Timestamp,
     pub finished: Timestamp,
+
     pub exit_code: i32,
+    pub stdout: Option<String>,
+    pub stderr: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
