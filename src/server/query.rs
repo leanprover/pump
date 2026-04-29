@@ -39,10 +39,15 @@ pub async fn query(
         }
 
         if let Some(result) = state.cache.get(&input) {
-            let rerun = query
+            let rerun_because_too_old = query
                 .force_rerun_if_older_than_seconds
                 .map(|seconds| result.finished() < Timestamp::now() - seconds.seconds())
                 .unwrap_or(false);
+
+            let rerun_because_failed =
+                query.force_rerun_if_nonzero_status && result.exit_code() != 0;
+
+            let rerun = rerun_because_too_old || rerun_because_failed;
             if !rerun {
                 completed.insert(key, result);
                 continue;

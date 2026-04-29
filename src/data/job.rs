@@ -17,6 +17,9 @@ pub struct JobQueryV0 {
     pub data: JobQueryDataV0,
 
     pub force_rerun_if_older_than_seconds: Option<i64>,
+
+    #[serde(default)]
+    pub force_rerun_if_nonzero_status: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -104,6 +107,12 @@ impl JobResult {
     pub fn finished(&self) -> Timestamp {
         match self {
             JobResult::V0(result) => result.finished,
+        }
+    }
+
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            JobResult::V0(result) => result.exit_code,
         }
     }
 }
