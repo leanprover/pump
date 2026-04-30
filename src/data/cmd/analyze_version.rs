@@ -42,6 +42,7 @@ pub struct LakeV0 {
 pub struct OutputV0 {
     pub sha: String,
     pub toolchain: Option<String>,
+    pub active_toolchain: Option<String>,
     pub manifest: Option<Value>,
     pub lake: Option<LakeV0>,
     pub check_build: Option<bool>,

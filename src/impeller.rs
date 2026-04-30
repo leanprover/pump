@@ -145,6 +145,10 @@ async fn run_build_version(
     cmd.args(&ctx.state.config.impeller.args_build_version);
     cmd.arg("--rev").arg(&input.sha);
 
+    if let Some(toolchain) = &input.override_toolchain {
+        cmd.arg("--override-toolchain").arg(toolchain);
+    }
+
     if let Some(build) = input.build {
         match build {
             true => cmd.arg("--build"),

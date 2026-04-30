@@ -6,6 +6,7 @@ use crate::data::common::{SourceV0, TimesV0};
 pub struct InputV0 {
     pub source: SourceV0,
     pub sha: String,
+    pub override_toolchain: Option<String>,
     pub build: Option<bool>,
     pub lint: Option<bool>,
     pub test: Option<bool>,
@@ -42,6 +43,8 @@ pub struct CommandV0 {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OutputV0 {
     pub sha: String,
+    pub toolchain: Option<String>,
+    pub active_toolchain: Option<String>,
     pub check_build: Option<bool>,
     pub check_test: Option<bool>,
     pub check_lint: Option<bool>,
