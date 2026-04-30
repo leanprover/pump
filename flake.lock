@@ -22,11 +22,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1777398963,
-        "narHash": "sha256-FTrWTUwWkJi6xNRrJRTZi0/SE5jTCycR6Q4hCJ7yvY4=",
+        "lastModified": 1777554511,
+        "narHash": "sha256-+catbFmvpys9WLVfXT0Gd/JihnAIQbmNyFzg7I72TZ0=",
         "owner": "leanprover",
         "repo": "impeller",
-        "rev": "89187a691d993f6c3ae3e9cb971e92c87d1ed2b4",
+        "rev": "d370b4c3b226dd9088b562488f0ddc7f53d4cbc5",
         "type": "github"
       },
       "original": {

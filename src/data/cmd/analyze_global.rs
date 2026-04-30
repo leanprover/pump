@@ -32,6 +32,7 @@ impl From<Input> for InputV0 {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct GitV0 {
+    pub default_branch: String,
     pub version_tags: Vec<String>,
     pub tag_shas: HashMap<String, String>,
 }
