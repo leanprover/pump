@@ -2,3 +2,6 @@
 [impeller]
 args = ["--bubblewrap"]
 args_analyze_global = ["--fetch-external-metadata", "--github-token-gh"]
+
+[clients.foo]
+password = "bar"

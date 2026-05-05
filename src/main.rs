@@ -14,12 +14,12 @@ use log::info;
 use tokio::select;
 
 use crate::cache::Cache;
-use crate::config::Config;
+use crate::config::{Config, ResolvedConfig};
 use crate::queue::Queue;
 
 #[derive(Clone)]
 struct AppState {
-    pub config: &'static Config,
+    pub config: &'static ResolvedConfig,
     pub repos_dir: &'static Path,
     pub cache: Arc<Cache>,
     pub queue: Arc<Mutex<Queue>>,
@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let args = Args::parse();
-    let config = Box::leak(Box::new(Config::load(&args.config)?));
+    let config = Box::leak(Box::new(Config::load(&args.config)?.resolve()?));
     info!("Threads available: {}", config.queue.threads_total);
 
     fs::create_dir_all(&args.cache_dir)?;

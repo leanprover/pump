@@ -17,6 +17,8 @@ class Args:
     pump_url: str
     batch_size: int
     poll_interval: int
+    basic_username: str
+    basic_password: str
 
 
 def fetch_manifest(manifest_file: Path) -> Any:
@@ -76,11 +78,11 @@ class Collector:
         self.results.update(new_results)
 
     def update(
-        self, pump_url: str, limit: int
+        self, pump_url: str, auth: tuple[str, str], limit: int
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         jobs = self._open_queries(limit)
 
-        res = requests.post(f"{pump_url}/query", json={"jobs": jobs})
+        res = requests.post(f"{pump_url}/query", json={"jobs": jobs}, auth=auth)
         res.raise_for_status()
         reply = res.json()
         pending = reply["pending"]
@@ -170,6 +172,8 @@ def main() -> None:
     parser.add_argument("-u", "--pump-url", default="http://127.0.0.1:5800")
     parser.add_argument("-b", "--batch-size", type=int, default=100)
     parser.add_argument("-i", "--poll-interval", type=int, default=2)
+    parser.add_argument("-U", "--basic-username", default="foo")
+    parser.add_argument("-P", "--basic-password", default="bar")
     args = parser.parse_args(namespace=Args())
 
     manifest = fetch_manifest(args.manifest_file)
@@ -190,8 +194,9 @@ def main() -> None:
         tv = p.add_task("version", total=0)
         tb = p.add_task("build", total=0)
 
+        auth = (args.basic_username, args.basic_password)
         while len(collector.results) < len(collector.queries):
-            pending, completed = collector.update(args.pump_url, args.batch_size)
+            pending, completed = collector.update(args.pump_url, auth, args.batch_size)
             derive_jobs(collector, sources)
 
             n_pending = len(pending)

@@ -2,6 +2,11 @@ use std::collections::HashMap;
 
 use axum::Json;
 use axum::extract::State;
+use axum::http::{HeaderValue, StatusCode, header};
+use axum::response::{IntoResponse, Response};
+use axum_extra::TypedHeader;
+use axum_extra::headers::Authorization;
+use axum_extra::headers::authorization::Basic;
 use jiff::{Timestamp, ToSpan};
 use serde::{Deserialize, Serialize};
 
@@ -21,10 +26,33 @@ pub struct QueryReply {
     completed: HashMap<String, JobResult>,
 }
 
+fn is_known_client(state: &AppState, auth: &Authorization<Basic>) -> bool {
+    state
+        .config
+        .clients
+        .get(auth.username())
+        .filter(|pw| *pw == auth.password())
+        .is_some()
+}
+
+fn unauthorized_response() -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        [(header::WWW_AUTHENTICATE, HeaderValue::from_static("Basic"))],
+    )
+        .into_response()
+}
+
 pub async fn query(
     State(state): State<AppState>,
+    TypedHeader(auth): TypedHeader<Authorization<Basic>>,
     Json(body): Json<QueryRequest>,
-) -> Json<QueryReply> {
+) -> Response {
+    // Basic auth check
+    if !is_known_client(&state, &auth) {
+        return unauthorized_response();
+    }
+
     let mut queue = state.queue.lock().unwrap();
 
     let mut pending = HashMap::new();
@@ -58,5 +86,5 @@ pub async fn query(
         pending.insert(key, status);
     }
 
-    Json(QueryReply { completed, pending })
+    Json(QueryReply { completed, pending }).into_response()
 }

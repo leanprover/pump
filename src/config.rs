@@ -1,4 +1,9 @@
-use std::{fs, io::ErrorKind, path::Path};
+use std::{
+    collections::HashMap,
+    fs,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Context;
 use serde::Deserialize;
@@ -74,6 +79,18 @@ impl Default for Queue {
 }
 
 #[derive(Deserialize)]
+pub struct Client {
+    pub password: Option<String>,
+    pub password_file: Option<PathBuf>,
+}
+
+impl Default for Client {
+    fn default() -> Self {
+        serde_json::from_value(Value::Object(Map::new())).unwrap()
+    }
+}
+
+#[derive(Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub server: Server,
@@ -83,6 +100,9 @@ pub struct Config {
 
     #[serde(default)]
     pub queue: Queue,
+
+    #[serde(default)]
+    pub clients: HashMap<String, Client>,
 }
 
 impl Default for Config {
@@ -102,4 +122,30 @@ impl Config {
             toml::from_str(&text).with_context(|| format!("failed to parse {}", path.display()))?;
         Ok(config)
     }
+
+    pub fn resolve(self) -> anyhow::Result<ResolvedConfig> {
+        let mut clients = HashMap::new();
+        for (username, client) in self.clients {
+            if let Some(password) = client.password {
+                clients.insert(username, password);
+            } else if let Some(path) = client.password_file {
+                let password = fs::read_to_string(path)?.trim().to_string();
+                clients.insert(username, password);
+            }
+        }
+
+        Ok(ResolvedConfig {
+            server: self.server,
+            impeller: self.impeller,
+            queue: self.queue,
+            clients,
+        })
+    }
+}
+
+pub struct ResolvedConfig {
+    pub server: Server,
+    pub impeller: Impeller,
+    pub queue: Queue,
+    pub clients: HashMap<String, String>,
 }
