@@ -19,6 +19,8 @@ class Args:
     poll_interval: int
     basic_username: str
     basic_password: str
+    skip_version: bool
+    skip_build: bool
 
 
 def fetch_manifest(manifest_file: Path) -> Any:
@@ -110,7 +112,12 @@ def sorted_versions(versions: list[str]) -> list[str]:
     return [v for _, v in pv]
 
 
-def derive_jobs(collector: Collector, sources: list[tuple[str, str]]) -> None:
+def derive_jobs(
+    collector: Collector,
+    sources: list[tuple[str, str]],
+    skip_version: bool,
+    skip_build: bool,
+) -> None:
     for owner, repo in sorted(sources):
         result_global = collector.query(
             f"a/{owner}/{repo}",
@@ -127,6 +134,9 @@ def derive_jobs(collector: Collector, sources: list[tuple[str, str]]) -> None:
             continue
         output_global = result_global.get("output")
         if output_global is None:
+            continue
+
+        if skip_version:
             continue
 
         version_tags = (output_global.get("lake") or {}).get("version_tags")
@@ -147,6 +157,9 @@ def derive_jobs(collector: Collector, sources: list[tuple[str, str]]) -> None:
                     },
                 },
             )
+
+        if skip_build:
+            continue
 
         sorted_version_tags = sorted_versions(version_tags)
         if sorted_version_tags:
@@ -174,6 +187,8 @@ def main() -> None:
     parser.add_argument("-i", "--poll-interval", type=int, default=2)
     parser.add_argument("-U", "--basic-username", default="foo")
     parser.add_argument("-P", "--basic-password", default="bar")
+    parser.add_argument("--skip-version", action="store_true")
+    parser.add_argument("--skip-build", action="store_true")
     args = parser.parse_args(namespace=Args())
 
     manifest = fetch_manifest(args.manifest_file)
@@ -181,7 +196,12 @@ def main() -> None:
     print(f"Found {len(sources)} sources in manifest")
 
     collector = Collector()
-    derive_jobs(collector, sources)
+    derive_jobs(
+        collector,
+        sources,
+        skip_version=args.skip_version,
+        skip_build=args.skip_build,
+    )
 
     with Progress(
         "{task.description}",
@@ -197,7 +217,12 @@ def main() -> None:
         auth = (args.basic_username, args.basic_password)
         while len(collector.results) < len(collector.queries):
             pending, completed = collector.update(args.pump_url, auth, args.batch_size)
-            derive_jobs(collector, sources)
+            derive_jobs(
+                collector,
+                sources,
+                skip_version=args.skip_version,
+                skip_build=args.skip_build,
+            )
 
             n_pending = len(pending)
             n_running = sum(1 for v in pending.values() if v["started"])
