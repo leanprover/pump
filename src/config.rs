@@ -30,7 +30,7 @@ mod default {
 #[derive(Deserialize)]
 pub struct Server {
     #[serde(default = "default::server_addr")]
-    pub addr: String,
+    pub address: String,
 }
 
 impl Default for Server {
