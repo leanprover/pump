@@ -1,13 +1,13 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use jiff::Timestamp;
 use log::{debug, error};
 use serde::de::DeserializeOwned;
 use tempfile::NamedTempFile;
+use tokio::process::Command;
 
 use crate::{
     AppState,
@@ -61,7 +61,7 @@ async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
     let cmd_str = format!("{:?}", cmd);
     debug!("Running command: {}", cmd_str);
 
-    let output = tokio::task::spawn_blocking(move || cmd.output()).await??;
+    let output = cmd.output().await?;
     let exit_code = output.status.code().unwrap_or(-1);
     if exit_code != 0 {
         let stdout = String::from_utf8_lossy(&output.stdout);
