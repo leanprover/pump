@@ -24,7 +24,6 @@
         {
           default = craneLib.buildPackage {
             src = ./.;
-            buildInputs = [ impeller ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postInstall = ''
               wrapProgram $out/bin/pump \
