@@ -51,7 +51,7 @@ async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
     state: &AppState,
     source: &SourceV0,
     mut cmd: Command,
-) -> anyhow::Result<(Option<T>, i32, Option<String>, Option<String>)> {
+) -> anyhow::Result<(Option<T>, i32, String, String)> {
     let output_file = NamedTempFile::new()?;
 
     cmd.arg("--repo").arg(repo_dir_for_source(state, source));
@@ -69,12 +69,8 @@ async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
         error!("Command: {cmd_str}\nExit code: {exit_code}\nStdout:\n{stdout}\nStderr:\n{stderr}");
     }
 
-    let mut stdout = None;
-    let mut stderr = None;
-    if exit_code != 0 {
-        stdout = Some(String::from_utf8_lossy(&output.stdout).to_string());
-        stderr = Some(String::from_utf8_lossy(&output.stderr).to_string());
-    }
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
     let result = read_json_output(output_file.path()).ok();
     Ok((result, exit_code, stdout, stderr))
@@ -102,8 +98,8 @@ async fn run_analyze_global(
         started: ctx.started,
         finished: Timestamp::now(),
         exit_code,
-        stdout,
-        stderr,
+        stdout: Some(stdout),
+        stderr: Some(stderr),
     })
 }
 
@@ -130,8 +126,8 @@ async fn run_analyze_version(
         started: ctx.started,
         finished: Timestamp::now(),
         exit_code,
-        stdout,
-        stderr,
+        stdout: Some(stdout),
+        stderr: Some(stderr),
     })
 }
 
@@ -185,8 +181,8 @@ async fn run_build_version(
         started: ctx.started,
         finished: Timestamp::now(),
         exit_code,
-        stdout,
-        stderr,
+        stdout: Some(stdout),
+        stderr: Some(stderr),
     })
 }
 
