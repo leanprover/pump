@@ -31,10 +31,10 @@ impl From<Input> for InputV0 {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LakeV0 {
-    pub license: String,
+    pub license: Option<String>,
     pub license_files: Vec<String>,
     pub platform_independent: Option<bool>,
-    pub readme_file: String,
+    pub readme_file: Option<String>,
     pub version: String,
 }
 
