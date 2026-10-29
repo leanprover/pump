@@ -22,3 +22,10 @@ pub struct TimesV0 {
     pub started: Timestamp,
     pub finished: Timestamp,
 }
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ToolchainV0 {
+    pub declared: Option<String>,
+    pub active: Option<String>,
+    pub githash: Option<String>,
+}

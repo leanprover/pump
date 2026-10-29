@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::data::common::{SourceV0, TimesV0};
+use crate::data::common::{SourceV0, TimesV0, ToolchainV0};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputV0 {
@@ -41,8 +41,7 @@ pub struct LakeV0 {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OutputV0 {
     pub sha: String,
-    pub toolchain: Option<String>,
-    pub active_toolchain: Option<String>,
+    pub toolchain: ToolchainV0,
     pub manifest: Option<Value>,
     pub lake: Option<LakeV0>,
     pub check_build: Option<bool>,

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::data::common::{SourceV0, TimesV0};
+use crate::data::common::{SourceV0, TimesV0, ToolchainV0};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputV0 {
@@ -43,8 +43,7 @@ pub struct CommandV0 {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OutputV0 {
     pub sha: String,
-    pub toolchain: Option<String>,
-    pub active_toolchain: Option<String>,
+    pub toolchain: ToolchainV0,
     pub check_build: Option<bool>,
     pub check_test: Option<bool>,
     pub check_lint: Option<bool>,

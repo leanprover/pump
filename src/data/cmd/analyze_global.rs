@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 
-use crate::data::common::{SourceV0, TimesV0};
+use crate::data::common::{SourceV0, TimesV0, ToolchainV0};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InputV0 {
@@ -33,6 +33,7 @@ impl From<Input> for InputV0 {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct GitV0 {
     pub default_branch: String,
+    pub default_branch_sha: String,
     pub version_tags: Vec<String>,
     pub tag_shas: HashMap<String, String>,
 }
@@ -73,6 +74,7 @@ pub struct GithubV0 {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OutputV0 {
+    pub toolchain: ToolchainV0,
     pub git: GitV0,
     pub lake: Option<LakeV0>,
     pub github: Option<GithubV0>,
