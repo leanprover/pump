@@ -3,46 +3,49 @@ use std::{
     fs,
     io::ErrorKind,
     path::{Path, PathBuf},
+    process::Command,
+    time::Duration,
 };
 
-use anyhow::Context;
+use anyhow::{Context, anyhow, bail};
+use jiff::SignedDuration;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 
-mod default {
-    pub(super) fn server_addr() -> String {
-        "[::]:5800".to_string()
-    }
+use crate::data::{AppVersion, OutputVersion};
 
-    pub(super) fn impeller_cmd() -> String {
-        "impeller".to_string()
-    }
-
-    pub(super) fn queue_threads_total() -> usize {
-        num_cpus::get()
-    }
-
-    pub(super) fn queue_threads_build_version() -> usize {
-        8
-    }
-}
-
-#[derive(Deserialize)]
 pub struct Server {
-    #[serde(default = "default::server_addr")]
     pub address: String,
 }
 
-impl Default for Server {
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FServer {
+    pub address: Option<String>,
+}
+
+impl Default for FServer {
     fn default() -> Self {
         serde_json::from_value(Value::Object(Map::new())).unwrap()
     }
 }
 
-#[derive(Deserialize)]
 pub struct Impeller {
-    #[serde(default = "default::impeller_cmd")]
     pub cmd: String,
+    pub args: Vec<String>,
+    pub args_analyze_global: Vec<String>,
+    pub args_analyze_version: Vec<String>,
+    pub args_build_version: Vec<String>,
+    pub version: AppVersion,
+    pub version_analyze_global: OutputVersion,
+    pub version_analyze_version: OutputVersion,
+    pub version_build_version: OutputVersion,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FImpeller {
+    pub cmd: Option<String>,
 
     #[serde(default)]
     pub args: Vec<String>,
@@ -57,61 +60,89 @@ pub struct Impeller {
     pub args_build_version: Vec<String>,
 }
 
-impl Default for Impeller {
+impl Default for FImpeller {
     fn default() -> Self {
         serde_json::from_value(Value::Object(Map::new())).unwrap()
     }
 }
 
-#[derive(Deserialize)]
 pub struct Queue {
-    #[serde(default = "default::queue_threads_total")]
     pub threads_total: usize,
-
-    #[serde(default = "default::queue_threads_build_version")]
     pub threads_build_version: usize,
 }
 
-impl Default for Queue {
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FQueue {
+    pub threads_total: Option<usize>,
+    pub threads_build_version: Option<usize>,
+}
+
+impl Default for FQueue {
+    fn default() -> Self {
+        serde_json::from_value(Value::Object(Map::new())).unwrap()
+    }
+}
+
+pub struct Callback {
+    /// How often a callback is tried before giving up.
+    pub max_tries: u32,
+    /// Minimum delay between retries.
+    pub retry_delay: Duration,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FCallback {
+    pub max_tries: Option<u32>,
+    pub retry_delay: Option<SignedDuration>,
+}
+
+impl Default for FCallback {
     fn default() -> Self {
         serde_json::from_value(Value::Object(Map::new())).unwrap()
     }
 }
 
 #[derive(Deserialize)]
-pub struct Client {
+#[serde(deny_unknown_fields)]
+pub struct FClient {
     pub password: Option<String>,
     pub password_file: Option<PathBuf>,
 }
 
-impl Default for Client {
+impl Default for FClient {
     fn default() -> Self {
         serde_json::from_value(Value::Object(Map::new())).unwrap()
     }
 }
 
 #[derive(Deserialize)]
-pub struct Config {
+#[serde(deny_unknown_fields)]
+pub struct ConfigFile {
     #[serde(default)]
-    pub server: Server,
+    pub server: FServer,
 
     #[serde(default)]
-    pub impeller: Impeller,
+    pub impeller: FImpeller,
 
     #[serde(default)]
-    pub queue: Queue,
+    pub queue: FQueue,
 
     #[serde(default)]
-    pub clients: HashMap<String, Client>,
+    pub callback: FCallback,
+
+    #[serde(default)]
+    pub clients: HashMap<String, FClient>,
 }
 
-impl Default for Config {
+impl Default for ConfigFile {
     fn default() -> Self {
         serde_json::from_value(Value::Object(Map::new())).unwrap()
     }
 }
 
-impl Config {
+impl ConfigFile {
     pub fn load(path: &Path) -> anyhow::Result<Self> {
         let text = match fs::read_to_string(path) {
             Ok(text) => text,
@@ -123,29 +154,81 @@ impl Config {
         Ok(config)
     }
 
-    pub fn resolve(self) -> anyhow::Result<ResolvedConfig> {
+    fn get_app_version(cmd: &str) -> anyhow::Result<AppVersion> {
+        let out = Command::new(cmd).arg("--version").output()?;
+        let out = String::from_utf8(out.stdout)?;
+        out.trim().parse().map_err(|it| anyhow!("{it}"))
+    }
+
+    fn get_output_version(cmd: &str, subcmd: &str) -> anyhow::Result<OutputVersion> {
+        let out = Command::new(cmd).arg(subcmd).arg("--version").output()?;
+        let out = String::from_utf8(out.stdout)?;
+        out.trim().parse().map_err(|it| anyhow!("{it}"))
+    }
+
+    pub fn resolve(self) -> anyhow::Result<Config> {
+        let server = Server {
+            address: self
+                .server
+                .address
+                .unwrap_or_else(|| "[::]:5800".to_string()),
+        };
+
+        let impeller_cmd = self.impeller.cmd.unwrap_or_else(|| "impeller".to_string());
+        let impeller = Impeller {
+            cmd: impeller_cmd.clone(),
+            args: self.impeller.args,
+            args_analyze_global: self.impeller.args_analyze_global,
+            args_analyze_version: self.impeller.args_analyze_version,
+            args_build_version: self.impeller.args_build_version,
+            version: Self::get_app_version(&impeller_cmd)?,
+            version_analyze_global: Self::get_output_version(&impeller_cmd, "analyze-global")?,
+            version_analyze_version: Self::get_output_version(&impeller_cmd, "analyze-version")?,
+            version_build_version: Self::get_output_version(&impeller_cmd, "build-version")?,
+        };
+
+        let queue = Queue {
+            threads_total: self.queue.threads_total.unwrap_or_else(num_cpus::get),
+            threads_build_version: self.queue.threads_build_version.unwrap_or(8),
+        };
+
+        let callback = Callback {
+            max_tries: self.callback.max_tries.unwrap_or(7),
+            retry_delay: match self.callback.retry_delay {
+                Some(d) => d
+                    .try_into()
+                    .map_err(|_| anyhow!("callback.retry_delay must not be negative"))?,
+                None => Duration::from_secs(10),
+            },
+        };
+
         let mut clients = HashMap::new();
         for (username, client) in self.clients {
-            if let Some(password) = client.password {
-                clients.insert(username, password);
-            } else if let Some(path) = client.password_file {
-                let password = fs::read_to_string(path)?.trim().to_string();
-                clients.insert(username, password);
-            }
+            let password = match (client.password, client.password_file) {
+                (Some(password), None) => password,
+                (None, Some(path)) => fs::read_to_string(&path)
+                    .with_context(|| format!("failed to read {}", path.display()))?
+                    .trim_end_matches('\n')
+                    .to_string(),
+                _ => bail!("client {username:?} needs exactly one of password, password_file"),
+            };
+            clients.insert(username, password);
         }
 
-        Ok(ResolvedConfig {
-            server: self.server,
-            impeller: self.impeller,
-            queue: self.queue,
+        Ok(Config {
+            server,
+            impeller,
+            queue,
+            callback,
             clients,
         })
     }
 }
 
-pub struct ResolvedConfig {
+pub struct Config {
     pub server: Server,
     pub impeller: Impeller,
     pub queue: Queue,
+    pub callback: Callback,
     pub clients: HashMap<String, String>,
 }

@@ -1,33 +1,37 @@
 use std::{
     fs,
     path::{Path, PathBuf},
+    process::Stdio,
+    sync::{Arc, Mutex},
 };
 
 use jiff::Timestamp;
-use log::{debug, error};
-use serde::de::DeserializeOwned;
+use log::{debug, warn};
+use serde_json::Value;
 use tempfile::NamedTempFile;
-use tokio::process::Command;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncRead, BufReader},
+    process::Command,
+};
 
 use crate::{
     AppState,
-    data::{
-        cmd::{analyze_global, analyze_version, build_version},
-        common::SourceV0,
-        job::{JobResultDataV0, JobResultV0},
-        job_input::JobInput,
-    },
+    data::{JobInput, Line, OutputVersion, Source},
+    storage::data::JobResultV0,
 };
 
-fn repo_dir_for_source(state: &AppState, source: &SourceV0) -> PathBuf {
+/// The log of a run, shared so it can be read while the run is in progress.
+pub type Log = Arc<Mutex<Vec<Line>>>;
+
+fn repo_dir_for_source(state: &AppState, source: &Source) -> PathBuf {
     match source {
-        SourceV0::Github { owner, repo } => state.repos_dir.join("github").join(owner).join(repo),
+        Source::Github { owner, repo } => state.repos_dir.join("github").join(owner).join(repo),
     }
 }
 
-fn url_for_source(source: &SourceV0) -> String {
+fn url_for_source(source: &Source) -> String {
     match source {
-        SourceV0::Github { owner, repo } => {
+        Source::Github { owner, repo } => {
             format!("https://github.com/{owner}/{repo}.git")
         }
     }
@@ -35,180 +39,190 @@ fn url_for_source(source: &SourceV0) -> String {
 
 pub fn threads_for_input(state: &AppState, input: &JobInput) -> usize {
     match &input {
-        JobInput::AnalyzeGlobal { .. } => 1,
-        JobInput::AnalyzeVersion { .. } => 1,
-        JobInput::BuildVersion { .. } => state.config.queue.threads_build_version,
+        JobInput::AnalyzeGlobal(_) => 1,
+        JobInput::AnalyzeVersion(_) => 1,
+        JobInput::BuildVersion(_) => state.config.queue.threads_build_version,
     }
 }
 
-fn read_json_output<T: DeserializeOwned>(path: &Path) -> anyhow::Result<T> {
-    let json = fs::read_to_string(path)?;
-    let result = serde_json::from_str::<T>(&json)?;
-    Ok(result)
+/// The output version a run of the current impeller would produce.
+pub fn version_for_input(state: &AppState, input: &JobInput) -> OutputVersion {
+    let impeller = &state.config.impeller;
+    match input {
+        JobInput::AnalyzeGlobal(_) => impeller.version_analyze_global,
+        JobInput::AnalyzeVersion(_) => impeller.version_analyze_version,
+        JobInput::BuildVersion(_) => impeller.version_build_version,
+    }
 }
 
-async fn run_command_and_parse_result<T: DeserializeOwned + Send + 'static>(
-    state: &AppState,
-    source: &SourceV0,
-    mut cmd: Command,
-) -> anyhow::Result<(Option<T>, i32, String, String)> {
-    let output_file = NamedTempFile::new()?;
+fn command_for_input(state: &AppState, input: &JobInput, threads: usize) -> Command {
+    let impeller = &state.config.impeller;
+    let mut cmd = Command::new(&impeller.cmd);
+    cmd.env("LEAN_NUM_THREADS", threads.to_string());
 
+    match input {
+        JobInput::AnalyzeGlobal(_) => {
+            cmd.arg("analyze-global");
+            cmd.args(&impeller.args);
+            cmd.args(&impeller.args_analyze_global);
+        }
+
+        JobInput::AnalyzeVersion(input) => {
+            cmd.arg("analyze-version");
+            cmd.args(&impeller.args);
+            cmd.args(&impeller.args_analyze_version);
+            cmd.arg("--rev").arg(&input.sha);
+        }
+
+        JobInput::BuildVersion(input) => {
+            cmd.arg("build-version");
+            cmd.args(&impeller.args);
+            cmd.args(&impeller.args_build_version);
+            cmd.arg("--rev").arg(&input.sha);
+
+            if let Some(toolchain) = &input.override_toolchain {
+                cmd.arg("--override-toolchain").arg(toolchain);
+            }
+
+            for (flag, value) in [
+                ("build", input.build),
+                ("test", input.test),
+                ("lint", input.lint),
+            ] {
+                match value {
+                    Some(true) => cmd.arg(format!("--{flag}")),
+                    Some(false) => cmd.arg(format!("--no-{flag}")),
+                    None => &mut cmd,
+                };
+            }
+        }
+    }
+
+    let source = input.source();
     cmd.arg("--repo").arg(repo_dir_for_source(state, source));
     cmd.arg("--url").arg(url_for_source(source));
-    cmd.arg("--output").arg(output_file.path());
-
-    let cmd_str = format!("{:?}", cmd);
-    debug!("Running command: {}", cmd_str);
-
-    let output = cmd.output().await?;
-    let exit_code = output.status.code().unwrap_or(-1);
-    if exit_code != 0 {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        error!("Command: {cmd_str}\nExit code: {exit_code}\nStdout:\n{stdout}\nStderr:\n{stderr}");
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    let result = read_json_output(output_file.path()).ok();
-    Ok((result, exit_code, stdout, stderr))
+    cmd
 }
 
-async fn run_analyze_global(
-    ctx: RunContext,
-    input: analyze_global::InputV0,
-) -> anyhow::Result<JobResultV0> {
-    let mut cmd = Command::new(&ctx.state.config.impeller.cmd);
-    cmd.arg("analyze-global");
-    cmd.args(&ctx.state.config.impeller.args);
-    cmd.args(&ctx.state.config.impeller.args_analyze_global);
-
-    let (output, exit_code, stdout, stderr) =
-        run_command_and_parse_result::<analyze_global::Output>(&ctx.state, &input.source, cmd)
-            .await?;
-
-    Ok(JobResultV0 {
-        data: JobResultDataV0::AnalyzeGlobal {
-            input: input.clone().into(),
-            output,
-        },
-        queued: ctx.queued,
-        started: ctx.started,
-        finished: Timestamp::now(),
-        exit_code,
-        stdout: Some(stdout),
-        stderr: Some(stderr),
-    })
+fn push_line(log: &Log, started: Timestamp, source: u8, text: String) {
+    let timestamp = Timestamp::now().duration_since(started).as_secs();
+    log.lock().unwrap().push(Line {
+        source,
+        timestamp,
+        text,
+    });
 }
 
-async fn run_analyze_version(
-    ctx: RunContext,
-    input: analyze_version::InputV0,
-) -> anyhow::Result<JobResultV0> {
-    let mut cmd = Command::new(&ctx.state.config.impeller.cmd);
-    cmd.arg("analyze-version");
-    cmd.args(&ctx.state.config.impeller.args);
-    cmd.args(&ctx.state.config.impeller.args_analyze_version);
-    cmd.arg("--rev").arg(&input.sha);
+async fn read_lines(reader: impl AsyncRead + Unpin, source: u8, log: &Log, started: Timestamp) {
+    let mut reader = BufReader::new(reader);
+    let mut buf = vec![];
+    loop {
+        buf.clear();
 
-    let (output, exit_code, stdout, stderr) =
-        run_command_and_parse_result::<analyze_version::Output>(&ctx.state, &input.source, cmd)
-            .await?;
-
-    Ok(JobResultV0 {
-        data: JobResultDataV0::AnalyzeVersion {
-            input: input.clone().into(),
-            output,
-        },
-        queued: ctx.queued,
-        started: ctx.started,
-        finished: Timestamp::now(),
-        exit_code,
-        stdout: Some(stdout),
-        stderr: Some(stderr),
-    })
+        // reader.read_line would error when non-UTF-8 bytes are encountered.
+        // This method should be a bit more robust than that.
+        match reader.read_until(b'\n', &mut buf).await {
+            Ok(0) => break, // EOF
+            Ok(_) => {
+                let line = buf.strip_suffix(b"\n").unwrap_or(&buf);
+                let text = String::from_utf8_lossy(line).into_owned();
+                push_line(log, started, source, text);
+            }
+            Err(e) => {
+                push_line(
+                    log,
+                    started,
+                    Line::PUMP,
+                    format!("Failed to read output: {e}"),
+                );
+                break;
+            }
+        }
+    }
 }
 
-async fn run_build_version(
-    ctx: RunContext,
-    input: build_version::InputV0,
-) -> anyhow::Result<JobResultV0> {
-    let mut cmd = Command::new(&ctx.state.config.impeller.cmd);
-    cmd.arg("build-version");
-    cmd.args(&ctx.state.config.impeller.args);
-    cmd.args(&ctx.state.config.impeller.args_build_version);
-    cmd.arg("--rev").arg(&input.sha);
-
-    if let Some(toolchain) = &input.override_toolchain {
-        cmd.arg("--override-toolchain").arg(toolchain);
+/// Read impeller's output file. Impeller only writes it on success, so an
+/// empty file means there's no output.
+fn read_output(path: &Path) -> anyhow::Result<Option<Value>> {
+    let json = fs::read_to_string(path)?;
+    if json.is_empty() {
+        return Ok(None);
     }
-
-    if let Some(build) = input.build {
-        match build {
-            true => cmd.arg("--build"),
-            false => cmd.arg("--no-build"),
-        };
-    }
-
-    if let Some(test) = input.test {
-        match test {
-            true => cmd.arg("--test"),
-            false => cmd.arg("--no-test"),
-        };
-    }
-
-    if let Some(lint) = input.lint {
-        match lint {
-            true => cmd.arg("--lint"),
-            false => cmd.arg("--no-lint"),
-        };
-    }
-
-    cmd.env("LEAN_NUM_THREADS", ctx.threads.to_string());
-
-    let (output, exit_code, stdout, stderr) =
-        run_command_and_parse_result::<build_version::Output>(&ctx.state, &input.source, cmd)
-            .await?;
-
-    Ok(JobResultV0 {
-        data: JobResultDataV0::BuildVersion {
-            input: input.clone().into(),
-            output,
-        },
-        queued: ctx.queued,
-        started: ctx.started,
-        finished: Timestamp::now(),
-        exit_code,
-        stdout: Some(stdout),
-        stderr: Some(stderr),
-    })
+    Ok(Some(serde_json::from_str(&json)?))
 }
 
-struct RunContext {
-    state: AppState,
-    queued: Timestamp,
+async fn run_command(
+    mut cmd: Command,
+    log: &Log,
     started: Timestamp,
-    threads: usize,
+) -> anyhow::Result<(Option<Value>, i32)> {
+    let output_file = NamedTempFile::new()?;
+
+    cmd.arg("--output").arg(output_file.path());
+    cmd.stdin(Stdio::null());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    cmd.kill_on_drop(true);
+
+    debug!("Running command: {cmd:?}");
+    let mut child = cmd.spawn()?;
+    let stdout = child.stdout.take().expect("stdout should be piped");
+    let stderr = child.stderr.take().expect("stderr should be piped");
+
+    let (_, _, status) = tokio::join!(
+        read_lines(stdout, Line::STDOUT, log, started),
+        read_lines(stderr, Line::STDERR, log, started),
+        child.wait(),
+    );
+    let exit_code = status?.code().unwrap_or(-1);
+
+    let output = read_output(output_file.path()).unwrap_or_else(|e| {
+        push_line(
+            log,
+            started,
+            Line::PUMP,
+            format!("Failed to read output file: {e}"),
+        );
+        None
+    });
+
+    Ok((output, exit_code))
 }
 
+/// Run impeller for an input, streaming its output into `log`. Always produces
+/// a result. Errors are recorded in the log.
 pub async fn run(
-    state: AppState,
+    state: &AppState,
     input: JobInput,
     queued: Timestamp,
     started: Timestamp,
-) -> anyhow::Result<JobResultV0> {
-    let threads = threads_for_input(&state, &input);
-    let ctx = RunContext {
-        state,
+    threads: usize,
+    log: Log,
+) -> JobResultV0 {
+    let cmd = command_for_input(state, &input, threads);
+
+    let (output, exit_code) = run_command(cmd, &log, started).await.unwrap_or_else(|e| {
+        warn!("Failed to run impeller for {input:?}: {e:#}");
+        push_line(
+            &log,
+            started,
+            Line::PUMP,
+            format!("Failed to run impeller: {e:#}"),
+        );
+        (None, -1)
+    });
+
+    let log = log.lock().unwrap().clone();
+
+    JobResultV0 {
+        version: version_for_input(state, &input),
+        app_version: state.config.impeller.version,
+        input,
+        output,
         queued,
         started,
-        threads,
-    };
-    match input {
-        JobInput::AnalyzeGlobal { input } => run_analyze_global(ctx, input).await,
-        JobInput::AnalyzeVersion { input } => run_analyze_version(ctx, input).await,
-        JobInput::BuildVersion { input } => run_build_version(ctx, input).await,
+        finished: Timestamp::now(),
+        exit_code,
+        log: Some(log),
     }
 }

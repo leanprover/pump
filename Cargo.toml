@@ -9,15 +9,20 @@ axum = { version = "0.8.9", features = ["json"] }
 axum-extra = { version = "0.12.6", features = ["typed-header"] }
 clap = { version = "4.6.7", features = ["derive", "deprecated"] }
 env_logger = "0.11.11"
-jiff = { version = "0.2.38", features = ["serde"] }
-log = "0.4.34"
+jiff = { version = "0.2.43", features = ["serde"] }
+log = "0.4.35"
 num_cpus = "1.17.0"
+rand = "0.10.3"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 tempfile = "3.27.0"
 tokio = { version = "1.54.1", features = ["full"] }
-toml = "1.1.8"
+toml = "1.2.1"
 
 [lints]
+rust.unsafe_code = "forbid"
 clippy.large_enum_variant = "allow"
+clippy.result_large_err = "allow"
+clippy.use_self = "warn"

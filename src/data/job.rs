@@ -1,121 +1,129 @@
-use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
-use crate::data::cmd::{analyze_global, analyze_version, build_version};
+use crate::data::{AppVersion, OutputVersion, Source};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AnalyzeGlobalInput {
+    pub source: Source,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AnalyzeVersionInput {
+    pub source: Source,
+    pub sha: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildVersionInput {
+    pub source: Source,
+    pub sha: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub override_toolchain: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lint: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum JobQueryDataV0 {
-    AnalyzeGlobal { input: analyze_global::Input },
-    AnalyzeVersion { input: analyze_version::Input },
-    BuildVersion { input: build_version::Input },
+#[serde(deny_unknown_fields)]
+pub enum JobInput {
+    AnalyzeGlobal(AnalyzeGlobalInput),
+    AnalyzeVersion(AnalyzeVersionInput),
+    BuildVersion(BuildVersionInput),
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct JobQueryV0 {
-    #[serde(flatten)]
-    pub data: JobQueryDataV0,
-
-    pub force_rerun_if_older_than_seconds: Option<i64>,
-
-    #[serde(default)]
-    pub force_rerun_if_nonzero_status: bool,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(tag = "version", rename_all = "snake_case")]
-pub enum JobQuery {
-    V0(JobQueryV0),
-}
-
-impl From<JobQueryV0> for JobQuery {
-    fn from(value: JobQueryV0) -> Self {
-        Self::V0(value)
+impl JobInput {
+    pub fn id(&self) -> String {
+        let json = serde_json::to_string(self).expect("input should be serializable");
+        Sha256::digest(json)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
     }
-}
 
-impl From<JobQuery> for JobQueryV0 {
-    fn from(value: JobQuery) -> Self {
-        match value {
-            JobQuery::V0(job) => job,
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct JobStatusV0 {
-    #[serde(flatten)]
-    pub data: JobQueryDataV0,
-
-    pub queued: Timestamp,
-    pub started: Option<Timestamp>,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(tag = "version", rename_all = "snake_case")]
-pub enum JobStatus {
-    V0(JobStatusV0),
-}
-
-impl From<JobStatusV0> for JobStatus {
-    fn from(value: JobStatusV0) -> Self {
-        Self::V0(value)
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum JobResultDataV0 {
-    AnalyzeGlobal {
-        input: analyze_global::Input,
-        output: Option<analyze_global::Output>,
-    },
-    AnalyzeVersion {
-        input: analyze_version::Input,
-        output: Option<analyze_version::Output>,
-    },
-    BuildVersion {
-        input: build_version::Input,
-        output: Option<build_version::Output>,
-    },
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct JobResultV0 {
-    #[serde(flatten)]
-    pub data: JobResultDataV0,
-
-    pub queued: Timestamp,
-    pub started: Timestamp,
-    pub finished: Timestamp,
-
-    pub exit_code: i32,
-    pub stdout: Option<String>,
-    pub stderr: Option<String>,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(tag = "version", rename_all = "snake_case")]
-pub enum JobResult {
-    V0(JobResultV0),
-}
-
-impl From<JobResultV0> for JobResult {
-    fn from(value: JobResultV0) -> Self {
-        Self::V0(value)
-    }
-}
-
-impl JobResult {
-    pub fn finished(&self) -> Timestamp {
+    pub fn source(&self) -> &Source {
         match self {
-            JobResult::V0(result) => result.finished,
+            Self::AnalyzeGlobal(input) => &input.source,
+            Self::AnalyzeVersion(input) => &input.source,
+            Self::BuildVersion(input) => &input.source,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct JobQuery {
+    pub input: JobInput,
+
+    pub max_age_seconds: Option<u64>,
+    pub min_version: Option<OutputVersion>,
+    pub min_app_version: Option<AppVersion>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn source() -> Source {
+        Source::Github {
+            owner: "leanprover".to_string(),
+            repo: "lean4".to_string(),
         }
     }
 
-    pub fn exit_code(&self) -> i32 {
-        match self {
-            JobResult::V0(result) => result.exit_code,
-        }
+    fn sha() -> String {
+        "0123456789abcdef0123456789abcdef01234567".to_string()
+    }
+
+    /// Job ids are derived from these hashes. They must not change.
+    #[test]
+    fn stable_hashes() {
+        assert_eq!(
+            JobInput::AnalyzeGlobal(AnalyzeGlobalInput { source: source() }).id(),
+            "7df07e791da2e2707d9824e9f472e0b9f4fe20f3edee5780ee04130239dd1652"
+        );
+
+        assert_eq!(
+            JobInput::AnalyzeVersion(AnalyzeVersionInput {
+                source: source(),
+                sha: sha(),
+            })
+            .id(),
+            "0119b6a18f0eb5e1c94fe0b9bd3a3d3b715bd1ccddc8ff87b7fcc8260a457f2b"
+        );
+
+        assert_eq!(
+            JobInput::BuildVersion(BuildVersionInput {
+                source: source(),
+                sha: sha(),
+                override_toolchain: None,
+                build: None,
+                lint: None,
+                test: None,
+            })
+            .id(),
+            "2d2c5303625b89ccfc9769c2cf7dd48ac0ab6dd9bf2033b7d782816cccda6237"
+        );
+
+        assert_eq!(
+            JobInput::BuildVersion(BuildVersionInput {
+                source: source(),
+                sha: sha(),
+                override_toolchain: Some("leanprover/lean4:v4.20.0".to_string()),
+                build: Some(true),
+                lint: Some(false),
+                test: Some(true),
+            })
+            .id(),
+            "eec4e451cf10b4d60c0586c2757d199996dfc13791860cd3bacbd8ae7669f1f0"
+        );
     }
 }
