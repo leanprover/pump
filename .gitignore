@@ -3,3 +3,8 @@
 # Scripts
 /manifest.json
 /uv.lock
+
+# Running pump locally
+/batch/
+/job/
+/repos/
