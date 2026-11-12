@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Run - pump</title>
+    <link rel="stylesheet" href="/static/common.css" />
+    <script src="/static/common.js"></script>
+  </head>
+  <body>
+    <nav><a href="/queue">← Queue</a></nav>
+    <h1>Run</h1>
+    <div id="status">Loading…</div>
+    <dl class="info" id="info"></dl>
+    <details class="section" id="input-section" hidden>
+      <summary><h2>Input</h2></summary>
+      <pre class="box" id="input"></pre>
+    </details>
+    <details class="section" id="log-section" open hidden>
+      <summary><h2>Log</h2></summary>
+      <p class="log-legend">
+        <span class="log-stdout">Black lines</span> are stdout,
+        <span class="log-stderr">red lines</span> are stderr,
+        <span class="log-pump">blue lines</span> are from pump. Timestamps
+        include seconds.
+      </p>
+      <pre class="box" id="log"></pre>
+    </details>
+
+    <script>
+      const REFRESH_RUNNING_MS = 2000;
+      const REFRESH_QUEUED_MS = 5000;
+
+      const id = idFromPath();
+      const infoEl = document.getElementById("info");
+      const logSectionEl = document.getElementById("log-section");
+      const logEl = document.getElementById("log");
+
+      // Start time of the run whose log we're showing. If it changes, the job
+      // was run again and we need to start the log over.
+      let started = null;
+      let logLength = 0;
+      let seenRunning = false;
+      let run = null;
+
+      document.title = `Run ${id.slice(0, 10)} - pump`;
+
+      function renderInfo(job, status) {
+        const inputSectionEl = document.getElementById("input-section");
+        if (inputSectionEl.hidden) {
+          document
+            .getElementById("input")
+            .replaceChildren(highlightJson(job.input));
+          inputSectionEl.hidden = false;
+        }
+
+        const now = Date.now();
+        fillInfo(infoEl, [
+          ["State", status],
+          ...inputRows(id, job.input),
+          ["Queued", formatTimestamp(job.queued)],
+          ["Started", formatTimestamp(job.started)],
+          [
+            "Running for",
+            job.started ? formatDuration(now - Date.parse(job.started)) : null,
+          ],
+        ]);
+      }
+
+      function appendLog(lines) {
+        if (lines.length === 0) return;
+        const stick = atBottom(logEl);
+        logEl.append(...lines.map(logLine));
+        logLength += lines.length;
+        if (stick) logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      async function pollRun() {
+        const data = await fetchJson(`/v1/queue/${id}?from=${logLength}`);
+        if (data === null) return false;
+
+        if (data.started !== started) {
+          if (started !== null) {
+            // A new run of the same job, start over.
+            const restart = await fetchJson(`/v1/queue/${id}`);
+            if (restart === null) return false;
+            logEl.replaceChildren();
+            logLength = 0;
+            started = restart.started;
+            run = restart;
+            appendLog(restart.log);
+            return true;
+          }
+          started = data.started;
+        }
+
+        run = data;
+        seenRunning = true;
+        logSectionEl.hidden = false;
+        appendLog(data.log);
+        return true;
+      }
+
+      async function refresh() {
+        let delay = REFRESH_RUNNING_MS;
+        try {
+          if (await pollRun()) {
+            renderInfo(run, el("span", "running", "running"));
+            setStatus("");
+          } else {
+            run = null;
+            const queue = await fetchJson("/v1/queue");
+            const job = queue.jobs.find((j) => j.id === id);
+            if (job && !job.started) {
+              renderInfo(job, el("span", "muted", "queued"));
+              setStatus("Waiting for the job to start…");
+              delay = REFRESH_QUEUED_MS;
+            } else if (job) {
+              // Started between the two requests, try again right away.
+              delay = 0;
+            } else if (seenRunning) {
+              setStatus("Run finished, loading result…");
+              location.replace(`/job/${id}`);
+              return;
+            } else {
+              infoEl.replaceChildren();
+              const status = document.getElementById("status");
+              status.replaceChildren(
+                "This job is not in the queue. ",
+                link(`/job/${id}`, "View its latest result"),
+                ".",
+              );
+              return;
+            }
+          }
+        } catch (e) {
+          setStatus(`Refresh failed: ${e.message}`, true);
+        }
+        setTimeout(refresh, delay);
+      }
+
+      // Keep "Running for" ticking between fetches.
+      setInterval(() => {
+        if (run) renderInfo(run, el("span", "running", "running"));
+      }, 1000);
+      refresh();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Job result - pump</title>
+    <link rel="stylesheet" href="/static/common.css" />
+    <script src="/static/common.js"></script>
+  </head>
+  <body>
+    <nav><a href="/queue">← Queue</a></nav>
+    <h1>Job result</h1>
+    <div id="status">Loading…</div>
+    <dl class="info" id="info"></dl>
+    <details class="section" id="input-section" hidden>
+      <summary><h2>Input</h2></summary>
+      <pre class="box" id="input"></pre>
+    </details>
+    <details class="section" id="output-section" hidden>
+      <summary><h2>Output</h2></summary>
+      <pre class="box" id="output"></pre>
+    </details>
+    <details class="section" id="log-section" open hidden>
+      <summary><h2>Log</h2></summary>
+      <p class="log-legend">
+        <span class="log-stdout">Black lines</span> are stdout,
+        <span class="log-stderr">red lines</span> are stderr,
+        <span class="log-pump">blue lines</span> are from pump. Timestamps
+        include seconds.
+      </p>
+      <pre class="box" id="log"></pre>
+    </details>
+
+    <script>
+      const id = idFromPath();
+      document.title = `Job result ${id.slice(0, 10)} - pump`;
+
+      function duration(from, to) {
+        return formatDuration(Date.parse(to) - Date.parse(from));
+      }
+
+      function render(job) {
+        fillInfo(document.getElementById("info"), [
+          ...inputRows(id, job.input),
+          [
+            "Exit code",
+            el("span", job.exit_code === 0 ? "" : "error", String(job.exit_code)),
+          ],
+          ["Queued", formatTimestamp(job.queued)],
+          ["Started", formatTimestamp(job.started)],
+          ["Finished", formatTimestamp(job.finished)],
+          ["Queued for", duration(job.queued, job.started)],
+          ["Ran for", duration(job.started, job.finished)],
+          ["Output version", job.version],
+          ["Impeller version", job.app_version],
+        ]);
+
+        document
+          .getElementById("input")
+          .replaceChildren(highlightJson(job.input));
+        document.getElementById("input-section").hidden = false;
+
+        if (job.output !== null && job.output !== undefined) {
+          document
+            .getElementById("output")
+            .replaceChildren(highlightJson(job.output));
+          document.getElementById("output-section").hidden = false;
+        }
+
+        if (job.log) {
+          document.getElementById("log").append(...job.log.map(logLine));
+          document.getElementById("log-section").hidden = false;
+        }
+      }
+
+      async function load() {
+        try {
+          const job = await fetchJson(`/v1/job/${id}`);
+          if (job === null) {
+            document
+              .getElementById("status")
+              .replaceChildren(
+                "No result for this job yet. ",
+                link(`/queue/${id}`, "Check the queue"),
+                ".",
+              );
+            return;
+          }
+          setStatus("");
+          render(job);
+        } catch (e) {
+          setStatus(`Loading failed: ${e.message}`, true);
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>

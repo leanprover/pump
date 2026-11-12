@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Queue - pump</title>
+    <link rel="stylesheet" href="/static/common.css" />
+    <script src="/static/common.js"></script>
+  </head>
+  <body>
+    <h1>Queue</h1>
+    <div id="status">Loading…</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>State</th>
+            <th>Type</th>
+            <th>Repo</th>
+            <th>Sha</th>
+            <th>Options</th>
+            <th>Running for</th>
+          </tr>
+        </thead>
+        <tbody id="jobs"></tbody>
+      </table>
+    </div>
+
+    <script>
+      const REFRESH_MS = 5000;
+
+      const jobsEl = document.getElementById("jobs");
+
+      let jobs = [];
+      let lastUpdate = null;
+      let lastError = null;
+
+      function stateNode(job) {
+        const a = link(
+          `/queue/${job.id}`,
+          job.started ? "running" : "queued",
+          job.started ? "View log" : "View job",
+        );
+        a.className = job.started ? "running" : "muted";
+        return a;
+      }
+
+      function render() {
+        const now = Date.now();
+        const rows = jobs.map((job) => {
+          const started = job.started ? Date.parse(job.started) : null;
+          const runningFor =
+            started === null ? "" : formatDuration(now - started);
+
+          const tr = el(
+            "tr",
+            null,
+            el("td", null, stateNode(job)),
+            el("td", null, job.input.type),
+            el("td", null, repoNode(job.input.source)),
+            el("td", null, shaNode(job.input)),
+            el("td", "muted", inputOptions(job.input)),
+            el("td", "num", runningFor),
+          );
+          tr.title = job.id;
+          return tr;
+        });
+        jobsEl.replaceChildren(...rows);
+
+        if (!lastUpdate && !lastError) return;
+        const nRunning = jobs.filter((j) => j.started).length;
+        const nQueued = jobs.length - nRunning;
+        let text = `${nRunning} running, ${nQueued} queued`;
+        if (lastUpdate) {
+          text += ` · updated ${formatDuration(now - lastUpdate)} ago`;
+        }
+        if (lastError) text += ` · refresh failed: ${lastError}`;
+        setStatus(text, lastError !== null);
+      }
+
+      async function refresh() {
+        try {
+          const data = await fetchJson("/v1/queue");
+          // Running jobs first, then by queue time (server already sorts by
+          // queue time).
+          jobs = data.jobs.sort((a, b) => !!b.started - !!a.started);
+          lastUpdate = Date.now();
+          lastError = null;
+        } catch (e) {
+          lastError = e.message;
+        }
+        render();
+        setTimeout(refresh, REFRESH_MS);
+      }
+
+      // Re-render every second so the durations keep ticking between fetches.
+      setInterval(render, 1000);
+      refresh();
+    </script>
+  </body>
+</html>

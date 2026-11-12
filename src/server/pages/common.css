@@ -1,0 +1,177 @@
+:root {
+  color-scheme: light dark;
+  --fg: #1a1a1a;
+  --bg: #ffffff;
+  --muted: #6b6b6b;
+  --border: #e2e2e2;
+  --code-bg: #f5f5f5;
+  --running: #1f7a3a;
+  --error: #b3261e;
+  --log-pump: #1a5fb4;
+  --json-key: #7a3e9d;
+  --json-string: #1f6f43;
+  --json-number: #1a5fb4;
+  --json-literal: #a35200;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e6e6e6;
+    --bg: #161616;
+    --muted: #9a9a9a;
+    --border: #333333;
+    --code-bg: #1f1f1f;
+    --running: #5fd17f;
+    --error: #f2766d;
+    --log-pump: #8cb8f5;
+    --json-key: #d0a3f0;
+    --json-string: #8fd6a0;
+    --json-number: #8cb8f5;
+    --json-literal: #f0b46e;
+  }
+}
+body {
+  margin: 0 auto;
+  padding: 16px;
+  max-width: 1200px;
+  font-family: system-ui, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+nav {
+  font-size: 0.9em;
+  margin-bottom: 8px;
+}
+h1 {
+  font-size: 1.4em;
+  margin: 0 0 4px;
+}
+h2 {
+  font-size: 1.1em;
+  margin: 24px 0 8px;
+}
+
+/* Collapsible page sections with an h2 as their summary. */
+details.section > summary {
+  cursor: pointer;
+  margin: 24px 0 8px;
+}
+details.section > summary::marker {
+  color: var(--muted);
+}
+details.section > summary > h2 {
+  display: inline;
+  margin: 0;
+}
+#status {
+  color: var(--muted);
+  font-size: 0.9em;
+  margin-bottom: 16px;
+}
+#status.error {
+  color: var(--error);
+}
+a {
+  color: inherit;
+}
+.mono {
+  font-family: ui-monospace, monospace;
+}
+.running {
+  color: var(--running);
+  font-weight: 600;
+}
+.muted {
+  color: var(--muted);
+}
+.error {
+  color: var(--error);
+}
+
+/* Tables */
+.table-wrap {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.9em;
+}
+th,
+td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+th {
+  color: var(--muted);
+  font-weight: 600;
+}
+td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Key-value info */
+dl.info {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+  font-size: 0.9em;
+}
+dl.info dt {
+  color: var(--muted);
+}
+dl.info dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Log and JSON output */
+pre.box {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.85em;
+  line-height: 1.35;
+  overflow: auto;
+  max-height: 80vh;
+}
+.log-line {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.log-time {
+  color: var(--muted);
+  user-select: none;
+}
+.log-legend {
+  color: var(--muted);
+  font-size: 0.85em;
+  margin: -4px 0 8px;
+}
+.log-legend .log-stdout {
+  color: var(--fg);
+}
+.log-pump {
+  color: var(--log-pump);
+  font-weight: 600;
+}
+.log-stderr {
+  color: var(--error);
+}
+.json-key {
+  color: var(--json-key);
+}
+.json-string {
+  color: var(--json-string);
+}
+.json-number {
+  color: var(--json-number);
+}
+.json-literal {
+  color: var(--json-literal);
+}
