@@ -5,11 +5,10 @@ use axum::{
 
 use crate::{
     AppState,
-    server::{api::Error, auth::AuthedClient, data::JobResult},
+    server::{api::Error, data::JobResult},
 };
 
 pub async fn get_by_id(
-    _client: AuthedClient,
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<JobResult>, Error> {
