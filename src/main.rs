@@ -13,7 +13,7 @@ use std::{
     time::Duration,
 };
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use log::info;
 use tokio::{select, sync::Notify};
 
@@ -38,18 +38,44 @@ struct AppState {
 }
 
 #[derive(Parser)]
+#[command(disable_version_flag = true)]
 struct Args {
+    /// Print versions and exit.
+    #[arg(long, short = 'V', action = ArgAction::SetTrue)]
+    version: bool,
+
+    /// Path to the config file.
     #[arg(long, short, default_value = "config.toml")]
     config: PathBuf,
 
+    /// Path to the directory to store batches in.
     #[arg(long, default_value = "batch")]
     batch_dir: PathBuf,
 
+    /// Path to the directory to store job results in.
     #[arg(long, default_value = "job")]
     job_dir: PathBuf,
 
+    /// Path to the directory to cache git repos in.
     #[arg(long, default_value = "repos")]
     repos_dir: PathBuf,
+}
+
+fn print_version(config: &Config) {
+    println!("pump {}", env!("CARGO_PKG_VERSION"));
+    println!("impeller {}", config.impeller.version);
+    println!(
+        "impeller analyze-global {}",
+        config.impeller.version_analyze_global
+    );
+    println!(
+        "impeller analyze-version {}",
+        config.impeller.version_analyze_version
+    );
+    println!(
+        "impeller build-version {}",
+        config.impeller.version_build_version
+    );
 }
 
 #[tokio::main]
@@ -59,6 +85,12 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let config = ConfigFile::load(&args.config)?.resolve()?;
     let config = Box::leak(Box::new(config));
+
+    if args.version {
+        print_version(config);
+        return Ok(());
+    }
+
     info!("Impeller version: {}", config.impeller.version);
     info!(
         "Impeller version (analyze-global): {}",
