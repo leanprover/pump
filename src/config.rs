@@ -46,6 +46,9 @@ pub struct Impeller {
     /// Further output is skipped. This size includes an estimation of pump's
     /// per-line overhead.
     pub max_log_bytes: usize,
+    /// Maximum size of impeller's output file in bytes. Larger outputs are
+    /// discarded, making the run fail.
+    pub max_output_bytes: u64,
 }
 
 #[derive(Deserialize)]
@@ -66,6 +69,8 @@ pub struct FImpeller {
     pub args_build_version: Vec<String>,
 
     pub max_log_bytes: Option<usize>,
+
+    pub max_output_bytes: Option<u64>,
 }
 
 impl Default for FImpeller {
@@ -194,6 +199,7 @@ impl ConfigFile {
             version_analyze_version: Self::get_output_version(&impeller_cmd, "analyze-version")?,
             version_build_version: Self::get_output_version(&impeller_cmd, "build-version")?,
             max_log_bytes: self.impeller.max_log_bytes.unwrap_or(16 * 1024 * 1024), // 16 MiB
+            max_output_bytes: self.impeller.max_output_bytes.unwrap_or(1024 * 1024), // 1 MiB
         };
 
         let queue = Queue {

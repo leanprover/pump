@@ -5,6 +5,7 @@ use std::{
     sync::Mutex,
 };
 
+use anyhow::bail;
 use jiff::Timestamp;
 use log::{debug, warn};
 use serde_json::Value;
@@ -210,9 +211,13 @@ async fn read_lines(
     }
 }
 
-/// Read impeller's output file. Impeller only writes it on success, so an
-/// empty file means there's no output.
-fn read_output(path: &Path) -> anyhow::Result<Option<Value>> {
+/// Read impeller's output file. Impeller only writes it on success, so an empty
+/// file means there's no output. Files larger than `max_bytes` are rejected.
+fn read_output(path: &Path, max_bytes: u64) -> anyhow::Result<Option<Value>> {
+    let size = fs::metadata(path)?.len();
+    if size > max_bytes {
+        bail!("output file is {size} bytes, exceeding the limit of {max_bytes} bytes");
+    }
     let json = fs::read_to_string(path)?;
     if json.is_empty() {
         return Ok(None);
@@ -224,6 +229,7 @@ async fn run_command(
     mut cmd: Command,
     log: &Mutex<Log>,
     started: Timestamp,
+    max_output_bytes: u64,
 ) -> anyhow::Result<(Option<Value>, i32)> {
     let output_file = NamedTempFile::new()?;
 
@@ -245,7 +251,7 @@ async fn run_command(
     );
     let exit_code = status?.code().unwrap_or(-1);
 
-    let output = read_output(output_file.path()).unwrap_or_else(|e| {
+    let output = read_output(output_file.path(), max_output_bytes).unwrap_or_else(|e| {
         push_line(
             log,
             started,
@@ -270,7 +276,9 @@ pub async fn run(
 ) -> JobResultV0 {
     let cmd = command_for_input(state, &input, threads);
 
-    let (output, exit_code) = run_command(cmd, log, started).await.unwrap_or_else(|e| {
+    let max_output_bytes = state.config.impeller.max_output_bytes;
+    let result = run_command(cmd, log, started, max_output_bytes).await;
+    let (output, exit_code) = result.unwrap_or_else(|e| {
         warn!("Failed to run impeller for {input:?}: {e:#}");
         push_line(
             log,
