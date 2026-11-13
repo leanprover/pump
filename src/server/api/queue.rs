@@ -42,8 +42,8 @@ pub async fn get_by_id(
     let run = runs.0.get(&id).ok_or(Error::NotFound)?;
     let log = run.log.lock().unwrap();
     let from = match usize::try_from(query.from) {
-        Ok(from) => from.min(log.len()),
-        Err(_) => log.len().saturating_sub(query.from.unsigned_abs()),
+        Ok(from) => from.min(log.lines.len()),
+        Err(_) => log.lines.len().saturating_sub(query.from.unsigned_abs()),
     };
     Ok(Json(Run {
         id,
@@ -51,6 +51,6 @@ pub async fn get_by_id(
         queued: run.queued,
         started: run.started,
         from,
-        log: log[from..].to_vec(),
+        log: log.lines[from..].to_vec(),
     }))
 }

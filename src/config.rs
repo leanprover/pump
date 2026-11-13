@@ -40,6 +40,12 @@ pub struct Impeller {
     pub version_analyze_global: OutputVersion,
     pub version_analyze_version: OutputVersion,
     pub version_build_version: OutputVersion,
+
+    /// Maximum size of a run's log in bytes.
+    ///
+    /// Further output is skipped. This size includes an estimation of pump's
+    /// per-line overhead.
+    pub max_log_bytes: usize,
 }
 
 #[derive(Deserialize)]
@@ -58,6 +64,8 @@ pub struct FImpeller {
 
     #[serde(default)]
     pub args_build_version: Vec<String>,
+
+    pub max_log_bytes: Option<usize>,
 }
 
 impl Default for FImpeller {
@@ -185,6 +193,7 @@ impl ConfigFile {
             version_analyze_global: Self::get_output_version(&impeller_cmd, "analyze-global")?,
             version_analyze_version: Self::get_output_version(&impeller_cmd, "analyze-version")?,
             version_build_version: Self::get_output_version(&impeller_cmd, "build-version")?,
+            max_log_bytes: self.impeller.max_log_bytes.unwrap_or(16 * 1024 * 1024), // 16 MiB
         };
 
         let queue = Queue {

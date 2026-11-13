@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet, hash_map::Entry};
+use std::{
+    collections::{HashMap, HashSet, hash_map::Entry},
+    sync::{Arc, Mutex},
+};
 
 use jiff::{SignedDuration, Timestamp};
 use log::{error, info};
@@ -33,7 +36,7 @@ pub struct Running {
     pub queued: Timestamp,
     pub started: Timestamp,
     pub threads: usize,
-    pub log: Log,
+    pub log: Arc<Mutex<Log>>,
 }
 
 /// All in-progress runs, by job id.
@@ -272,7 +275,7 @@ fn start_run(state: &AppState, runs: &mut Runs, job: Pending, threads: usize) {
     info!("Starting {id}");
 
     let started = Timestamp::now();
-    let log = Log::default();
+    let log = Arc::new(Mutex::new(Log::new(state.config.impeller.max_log_bytes)));
     let run = Running {
         input: job.input.clone(),
         queued: job.queued,
@@ -284,7 +287,7 @@ fn start_run(state: &AppState, runs: &mut Runs, job: Pending, threads: usize) {
 
     let state = state.clone();
     tokio::spawn(async move {
-        let result = impeller::run(&state, job.input, job.queued, started, threads, log).await;
+        let result = impeller::run(&state, job.input, job.queued, started, threads, &log).await;
         info!("Finished {id} with exit code {}", result.exit_code);
 
         // Store the result before removing the run so the job is never

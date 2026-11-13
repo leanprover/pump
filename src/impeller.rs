@@ -2,7 +2,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Stdio,
-    sync::{Arc, Mutex},
+    sync::Mutex,
 };
 
 use jiff::Timestamp;
@@ -10,7 +10,7 @@ use log::{debug, warn};
 use serde_json::Value;
 use tempfile::NamedTempFile;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncRead, BufReader},
+    io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, BufReader},
     process::Command,
 };
 
@@ -20,8 +20,32 @@ use crate::{
     storage::data::JobResultV0,
 };
 
+/// Approximate per-line overhead of a stored log line beyond its text, in
+/// bytes. A line is serialized like `[1,12345,""],`.
+const LINE_OVERHEAD: usize = 16;
+
 /// The log of a run, shared so it can be read while the run is in progress.
-pub type Log = Arc<Mutex<Vec<Line>>>;
+pub struct Log {
+    pub lines: Vec<Line>,
+    /// Approximate size of the stored log so far, in bytes (text plus
+    /// [`LINE_OVERHEAD`] per line).
+    bytes: usize,
+    /// Once `bytes` would exceed this, further output is skipped.
+    max_bytes: usize,
+    /// Whether output is being skipped.
+    full: bool,
+}
+
+impl Log {
+    pub fn new(max_bytes: usize) -> Self {
+        Self {
+            lines: vec![],
+            bytes: 0,
+            max_bytes,
+            full: false,
+        }
+    }
+}
 
 fn repo_dir_for_source(state: &AppState, source: &Source) -> PathBuf {
     match source {
@@ -104,16 +128,46 @@ fn command_for_input(state: &AppState, input: &JobInput, threads: usize) -> Comm
     cmd
 }
 
-fn push_line(log: &Log, started: Timestamp, source: u8, text: String) {
+/// Append a line to the log. Lines by pump itself are always appended. Other
+/// lines are skipped once the log has reached its size limit.
+///
+/// Returns false if the line was skipped.
+fn push_line(log: &Mutex<Log>, started: Timestamp, source: u8, text: String) -> bool {
     let timestamp = Timestamp::now().duration_since(started).as_secs();
-    log.lock().unwrap().push(Line {
+    let mut log = log.lock().unwrap();
+
+    if source != Line::PUMP {
+        if log.full {
+            return false;
+        }
+        let bytes = log.bytes.saturating_add(text.len() + LINE_OVERHEAD);
+        if bytes > log.max_bytes {
+            log.full = true;
+            log.lines.push(Line {
+                source: Line::PUMP,
+                timestamp,
+                text: "Log too large, skipping remaining output".to_string(),
+            });
+            return false;
+        }
+        log.bytes = bytes;
+    }
+
+    log.lines.push(Line {
         source,
         timestamp,
         text,
     });
+    true
 }
 
-async fn read_lines(reader: impl AsyncRead + Unpin, source: u8, log: &Log, started: Timestamp) {
+async fn read_lines(
+    reader: impl AsyncRead + Unpin,
+    source: u8,
+    log: &Mutex<Log>,
+    started: Timestamp,
+) {
+    let max_bytes = log.lock().unwrap().max_bytes;
     let mut reader = BufReader::new(reader);
     let mut buf = vec![];
     loop {
@@ -121,12 +175,27 @@ async fn read_lines(reader: impl AsyncRead + Unpin, source: u8, log: &Log, start
 
         // reader.read_line would error when non-UTF-8 bytes are encountered.
         // This method should be a bit more robust than that.
-        match reader.read_until(b'\n', &mut buf).await {
+        //
+        // A line longer than the whole log limit can never fit, so reading is
+        // capped there to avoid buffering arbitrarily long lines.
+        let mut limited = (&mut reader).take(max_bytes as u64 + 1);
+        match limited.read_until(b'\n', &mut buf).await {
             Ok(0) => break, // EOF
             Ok(_) => {
                 let line = buf.strip_suffix(b"\n").unwrap_or(&buf);
                 let text = String::from_utf8_lossy(line).into_owned();
-                push_line(log, started, source, text);
+                if !push_line(log, started, source, text) {
+                    // Keep draining the pipe so the process doesn't block.
+                    if let Err(e) = tokio::io::copy(&mut reader, &mut tokio::io::sink()).await {
+                        push_line(
+                            log,
+                            started,
+                            Line::PUMP,
+                            format!("Failed to read output: {e}"),
+                        );
+                    }
+                    break;
+                }
             }
             Err(e) => {
                 push_line(
@@ -153,7 +222,7 @@ fn read_output(path: &Path) -> anyhow::Result<Option<Value>> {
 
 async fn run_command(
     mut cmd: Command,
-    log: &Log,
+    log: &Mutex<Log>,
     started: Timestamp,
 ) -> anyhow::Result<(Option<Value>, i32)> {
     let output_file = NamedTempFile::new()?;
@@ -197,14 +266,14 @@ pub async fn run(
     queued: Timestamp,
     started: Timestamp,
     threads: usize,
-    log: Log,
+    log: &Mutex<Log>,
 ) -> JobResultV0 {
     let cmd = command_for_input(state, &input, threads);
 
-    let (output, exit_code) = run_command(cmd, &log, started).await.unwrap_or_else(|e| {
+    let (output, exit_code) = run_command(cmd, log, started).await.unwrap_or_else(|e| {
         warn!("Failed to run impeller for {input:?}: {e:#}");
         push_line(
-            &log,
+            log,
             started,
             Line::PUMP,
             format!("Failed to run impeller: {e:#}"),
@@ -212,7 +281,7 @@ pub async fn run(
         (None, -1)
     });
 
-    let log = log.lock().unwrap().clone();
+    let log = log.lock().unwrap().lines.clone();
 
     JobResultV0 {
         version: version_for_input(state, &input),
@@ -224,5 +293,46 @@ pub async fn run(
         finished: Timestamp::now(),
         exit_code,
         log: Some(log),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn log_is_truncated() {
+        // Fits "abc" and "defg", but not "hij".
+        let log = Mutex::new(Log::new(2 * LINE_OVERHEAD + 7));
+        let started = Timestamp::now();
+        let input: &[u8] = b"abc\ndefg\nhij\nk\n";
+        read_lines(input, Line::STDOUT, &log, started).await;
+        push_line(&log, started, Line::PUMP, "error".to_string());
+
+        let log = log.lock().unwrap();
+        let texts = log
+            .lines
+            .iter()
+            .map(|l| (l.source, l.text.as_str()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            texts,
+            [
+                (Line::STDOUT, "abc"),
+                (Line::STDOUT, "defg"),
+                (Line::PUMP, "Log too large, skipping remaining output"),
+                (Line::PUMP, "error"),
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn long_line_is_not_buffered() {
+        let log = Mutex::new(Log::new(100));
+        let input = vec![b'x'; 1000];
+        read_lines(&input[..], Line::STDERR, &log, Timestamp::now()).await;
+        let log = log.lock().unwrap();
+        assert_eq!(log.lines.len(), 1);
+        assert_eq!(log.lines[0].source, Line::PUMP);
     }
 }
