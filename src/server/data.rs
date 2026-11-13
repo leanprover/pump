@@ -72,7 +72,7 @@ pub struct Run {
     pub queued: Timestamp,
     pub started: Timestamp,
 
-    /// Index of the first line in `log`, as requested via `from`.
+    /// Index of the first line in `log`.
     pub from: usize,
     pub log: Vec<Line>,
 }

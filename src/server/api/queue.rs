@@ -26,9 +26,10 @@ pub async fn get(State(state): State<AppState>) -> Result<Json<GetReply>, Error>
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GetRunQuery {
-    /// Only return log lines starting at this index.
+    /// Return only lines after this index. A negative index counts from the
+    /// back, similar to Python slices.
     #[serde(default)]
-    from: usize,
+    from: isize,
 }
 
 /// An in-progress run and its log so far.
@@ -40,12 +41,16 @@ pub async fn get_by_id(
     let runs = state.runs.lock().unwrap();
     let run = runs.0.get(&id).ok_or(Error::NotFound)?;
     let log = run.log.lock().unwrap();
+    let from = match usize::try_from(query.from) {
+        Ok(from) => from.min(log.len()),
+        Err(_) => log.len().saturating_sub(query.from.unsigned_abs()),
+    };
     Ok(Json(Run {
         id,
         input: run.input.clone(),
         queued: run.queued,
         started: run.started,
-        from: query.from,
-        log: log.get(query.from..).unwrap_or_default().to_vec(),
+        from,
+        log: log[from..].to_vec(),
     }))
 }
